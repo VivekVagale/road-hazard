@@ -54,7 +54,11 @@ def main() -> None:
     model = YOLO(args.model)
     model.train(
         data=str(DATA), epochs=args.epochs, imgsz=640, batch=args.batch,
-        seed=42, deterministic=True, patience=15,
+        # patience=0: no early stopping. With only 775 validation images, mAP
+        # jumps around epoch to epoch (0.32 then 0.24), so a first run with
+        # patience=15 stopped at epoch 40 while still improving, and skipped
+        # the last 10 epochs where mosaic augmentation is switched off.
+        seed=42, deterministic=True, patience=0,
         project=str(RUNS), name=name, exist_ok=True,
         workers=4,  # Windows: more workers mostly adds startup time
     )
