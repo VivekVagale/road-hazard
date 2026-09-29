@@ -8,15 +8,16 @@ video, using a YOLO11 detector fine-tuned on **7,706 real Indian road images**
 browser (ONNX + WebAssembly, 10 MB). Try the sample photos, upload your own,
 or open it on a phone and point the camera at a road.
 
-Work in progress: the final 50-epoch training runs are underway; the table
-below is updated when they finish.
+Fixing one training mistake (early stopping on a noisy validation set) raised
+mAP@0.5 from 0.267 to 0.386, a 44% gain, with no model change. YOLO11s results
+are being added.
 
 ## Results (held-out test split, 775 images)
 
 | Model | Params | mAP@0.5 | mAP@0.5:0.95 | Pothole AP@0.5 | Alligator crack | Longitudinal crack | Transverse crack | Inference |
 |---|---|---|---|---|---|---|---|---|
 | YOLO11n, first run (stopped early at epoch 40) | 2.6M | 0.267 | 0.106 | 0.323 | 0.534 | 0.195 | 0.016 | 3.0 ms/img (RTX 4060) |
-| YOLO11n, 50 epochs | 2.6M | *training* | | | | | | |
+| **YOLO11n, 50 epochs (live demo)** | 2.6M | **0.386** | **0.164** | **0.429** | **0.673** | **0.308** | **0.133** | 2.9 ms/img (RTX 4060) |
 | YOLO11s, 50 epochs | 9.4M | *training* | | | | | | |
 
 ## Run it

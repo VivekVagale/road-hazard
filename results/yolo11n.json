@@ -1,0 +1,20 @@
+{
+  "model": "yolo11n",
+  "mAP50": 0.3858,
+  "mAP50_95": 0.1642,
+  "precision": 0.664,
+  "recall": 0.3293,
+  "per_class_AP50": {
+    "longitudinal_crack": 0.3075,
+    "transverse_crack": 0.1332,
+    "alligator_crack": 0.6734,
+    "pothole": 0.4292
+  },
+  "ms_per_image": {
+    "preprocess": 1.09,
+    "inference": 2.89,
+    "loss": 0.0,
+    "postprocess": 0.71
+  },
+  "params_M": 2.59
+}
