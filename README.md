@@ -4,6 +4,10 @@ Finds **potholes and road cracks** in road images and dashcam / helmet-cam
 video, using a YOLO11 detector fine-tuned on **7,706 real Indian road images**
 (RDD2022, India subset).
 
+**Live demo: https://vivekvagale.github.io/road-hazard/** : runs in your
+browser (ONNX + WebAssembly, 10 MB). Try the sample photos, upload your own,
+or open it on a phone and point the camera at a road.
+
 Work in progress: the final 50-epoch training runs are underway; the table
 below is updated when they finish.
 
@@ -28,6 +32,7 @@ python -m src.prepare                           # VOC XML -> YOLO labels, block 
 python -m src.train --model yolo11n.pt          # ~50 min on an RTX 4060
 python -m src.train --model yolo11s.pt
 streamlit run app.py                            # test images, uploads, or a video clip
+python -m src.export_web                        # ONNX for the browser demo in web/
 python -m pytest
 ```
 
@@ -48,6 +53,11 @@ flowchart LR
   show the same damage. Images are split in blocks of 25 consecutive frames,
   so near-duplicates cannot sit in both train and test.
 - **Images with no damage are kept** (58% of the data) so the model learns what a normal road looks like.
+
+The browser demo (`web/index.html`) re-implements YOLO's pre- and
+post-processing in JavaScript: letterbox resize to 640, then decode the
+[1, 8, 8400] output (box + 4 class scores per candidate) and non-maximum
+suppression. It matches the Python predictions on the same image.
 
 Design decisions and trade-offs: [docs/INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.md).
 

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Road Hazard Detection</title>
+<meta name="description" content="Pothole and road-crack detection with YOLO11, fine-tuned on Indian roads, running entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛣️</text></svg>">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5b6270; --border: #dfe3ea; --accent: #c2410c; --on-accent: #ffffff;
+    --c0: #0077b6; --c1: #7b2cbf; --c2: #16a34a; --c3: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --card: #171a21; --text: #e8eaef; --muted: #9aa3b2; --border: #2a2f3a; --accent: #fb923c; --on-accent: #1a0f05;
+            --c0: #38bdf8; --c1: #c084fc; --c2: #4ade80; --c3: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button, label.btn { font: inherit; cursor: pointer; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); padding: 6px 14px; font-size: .9rem; }
+  button:hover, label.btn:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  input[type=file] { display: none; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+  .thumbs img.sel { border-color: var(--accent); }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; align-items: start; }
+  @media (max-width: 720px) { .stage { grid-template-columns: 1fr; } }
+  canvas { width: 100%; height: auto; border-radius: 10px; background: #000; display: block; }
+  .legend div { display: flex; align-items: center; gap: 8px; font-size: .92rem; margin: 4px 0; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .count { margin-left: auto; font-weight: 600; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: .9rem; }
+  input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+  #status { color: var(--muted); font-size: .9rem; }
+  .note { color: var(--muted); font-size: .88rem; }
+  a { color: var(--accent); }
+  .hidden { display: none; }
+  video { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🛣️ Road Hazard Detection</h1>
+  <p class="sub">Finds <b>potholes</b> and <b>road cracks</b>. A YOLO11 detector fine-tuned on 6,000 real Indian road images,
+    running <b>in your browser</b>: images and camera frames never leave your device.</p>
+
+  <div class="card">
+    <div class="tabs">
+      <button id="tSample" class="on">Sample road photos</button>
+      <label class="btn">Upload photo<input type="file" id="fImg" accept="image/*"></label>
+      <label class="btn">Upload video<input type="file" id="fVid" accept="video/*"></label>
+      <button id="tCam">Live camera</button>
+    </div>
+    <div id="thumbs" class="thumbs"></div>
+    <div class="row"><span id="status">Loading model (10 MB, once)...</span></div>
+  </div>
+
+  <div class="card stage">
+    <canvas id="cv" width="640" height="640"></canvas>
+    <div>
+      <div class="legend" id="legend"></div>
+      <div class="row">Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25"> <span id="confV">0.25</span></div>
+      <p class="note" id="timing"></p>
+      <p class="note">Lower confidence finds more damage but adds false boxes.</p>
+    </div>
+  </div>
+  <video id="vid" playsinline muted></video>
+
+  <p class="note">Sample photos are held-out test images the model never trained on, from the
+    <a href="https://doi.org/10.6084/m9.figshare.21431547">RDD2022 dataset</a> (Arya et al., CC BY 4.0), India subset.
+    Cracks are hard: thin and long, so boxes vary a lot between annotators. Model accuracy per class is in the repo.
+    <br>Code and results: <a href="https://github.com/VivekVagale/road-hazard">github.com/VivekVagale/road-hazard</a> · by Vivek Vagale</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+const NAMES = ["longitudinal crack", "transverse crack", "alligator crack", "pothole"];
+const COLORS = () => [0, 1, 2, 3].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--c${i}`).trim());
+const SIZE = 640, N_SAMPLES = 12;
+const $ = (id) => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+let session, conf = 0.25, current = null, camStream = null, looping = false;
+
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+
+// Resize with padding to 640x640, keeping the aspect ratio ("letterbox"), as in training.
+function letterbox(src, w, h) {
+  const scale = Math.min(SIZE / w, SIZE / h);
+  const nw = Math.round(w * scale), nh = Math.round(h * scale);
+  const px = Math.floor((SIZE - nw) / 2), py = Math.floor((SIZE - nh) / 2);
+  const c = new OffscreenCanvas(SIZE, SIZE), g = c.getContext("2d");
+  g.fillStyle = "rgb(114,114,114)"; g.fillRect(0, 0, SIZE, SIZE);
+  g.drawImage(src, px, py, nw, nh);
+  const { data } = g.getImageData(0, 0, SIZE, SIZE);
+  const t = new Float32Array(3 * SIZE * SIZE), A = SIZE * SIZE;
+  for (let i = 0; i < A; i++) { t[i] = data[4 * i] / 255; t[A + i] = data[4 * i + 1] / 255; t[2 * A + i] = data[4 * i + 2] / 255; }
+  return { tensor: new ort.Tensor("float32", t, [1, 3, SIZE, SIZE]), scale, px, py };
+}
+
+function iou(a, b) {
+  const x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]), x2 = Math.min(a[2], b[2]), y2 = Math.min(a[3], b[3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter);
+}
+
+// Output is [1, 4 + classes, 8400]: box centre/size then one score per class, for 8400 candidate boxes.
+function decode(out, lb, w, h) {
+  const [, rows, n] = out.dims, d = out.data, boxes = [];
+  for (let i = 0; i < n; i++) {
+    let best = 0, cls = -1;
+    for (let c = 4; c < rows; c++) if (d[c * n + i] > best) { best = d[c * n + i]; cls = c - 4; }
+    if (best < conf) continue;
+    const cx = d[i], cy = d[n + i], bw = d[2 * n + i], bh = d[3 * n + i];
+    const x1 = (cx - bw / 2 - lb.px) / lb.scale, y1 = (cy - bh / 2 - lb.py) / lb.scale;
+    const x2 = (cx + bw / 2 - lb.px) / lb.scale, y2 = (cy + bh / 2 - lb.py) / lb.scale;
+    boxes.push({ box: [Math.max(0, x1), Math.max(0, y1), Math.min(w, x2), Math.min(h, y2)], score: best, cls });
+  }
+  // non-maximum suppression per class: keep the best box, drop overlapping duplicates
+  boxes.sort((a, b) => b.score - a.score);
+  const keep = [];
+  for (const b of boxes) if (!keep.some((k) => k.cls === b.cls && iou(k.box, b.box) > 0.45)) keep.push(b);
+  return keep;
+}
+
+function draw(src, w, h, dets) {
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  ctx.drawImage(src, 0, 0, w, h);
+  const col = COLORS(), lw = Math.max(2, Math.round(w / 300)), fs = Math.max(12, Math.round(w / 45));
+  ctx.font = `600 ${fs}px system-ui, sans-serif`;
+  for (const d of dets) {
+    const [x1, y1, x2, y2] = d.box;
+    ctx.strokeStyle = col[d.cls]; ctx.lineWidth = lw; ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    const label = `${NAMES[d.cls]} ${Math.round(d.score * 100)}%`, tw = ctx.measureText(label).width + 8;
+    const ty = y1 > fs + 6 ? y1 - fs - 6 : y1;
+    ctx.fillStyle = col[d.cls]; ctx.fillRect(x1, ty, tw, fs + 6);
+    ctx.fillStyle = "#000"; ctx.fillText(label, x1 + 4, ty + fs);
+  }
+  const counts = [0, 0, 0, 0]; dets.forEach((d) => counts[d.cls]++);
+  $("legend").innerHTML = NAMES.map((n, i) =>
+    `<div><span class="sw" style="background:${col[i]}"></span>${n}<span class="count">${counts[i]}</span></div>`).join("");
+}
+
+async function detect(src, w, h) {
+  const t0 = performance.now();
+  const lb = letterbox(src, w, h);
+  const out = (await session.run({ images: lb.tensor })).output0;
+  const dets = decode(out, lb, w, h);
+  draw(src, w, h, dets);
+  $("timing").textContent = `${Math.round(performance.now() - t0)} ms per frame on this device`;
+  return dets;
+}
+
+async function showImage(url) {
+  stopLoops();
+  const img = new Image(); img.src = url; await img.decode();
+  current = img;
+  await detect(img, img.naturalWidth, img.naturalHeight);
+}
+
+function stopLoops() {
+  looping = false;
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+  $("vid").pause();
+  $("tCam").classList.remove("on");
+}
+
+async function loop() {
+  const v = $("vid");
+  looping = true; current = v;
+  while (looping && !v.ended) {
+    if (v.readyState >= 2) await detect(v, v.videoWidth, v.videoHeight);
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+}
+
+// sample thumbnails
+for (let i = 1; i <= N_SAMPLES; i++) {
+  const t = document.createElement("img");
+  t.src = `samples/${String(i).padStart(2, "0")}.jpg`; t.alt = `test road ${i}`; t.loading = "lazy";
+  t.onclick = () => { document.querySelectorAll(".thumbs img").forEach((x) => x.classList.remove("sel")); t.classList.add("sel"); showImage(t.src); };
+  $("thumbs").append(t);
+}
+
+$("tSample").onclick = () => { $("thumbs").classList.remove("hidden"); $("tSample").classList.add("on"); document.querySelector(".thumbs img").click(); };
+$("fImg").onchange = (e) => { const f = e.target.files[0]; if (f) { $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on"); showImage(URL.createObjectURL(f)); } };
+$("fVid").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  stopLoops(); $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on");
+  const v = $("vid"); v.srcObject = null; v.src = URL.createObjectURL(f); v.loop = false; await v.play(); loop();
+};
+$("tCam").onclick = async () => {
+  if (camStream) { stopLoops(); return; }
+  stopLoops(); $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on");
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+  } catch (err) { $("status").textContent = "Camera not available: " + err.message; return; }
+  const v = $("vid"); v.src = ""; v.srcObject = camStream; await v.play();
+  $("tCam").classList.add("on"); loop();
+};
+$("conf").oninput = (e) => {
+  conf = +e.target.value; $("confV").textContent = conf.toFixed(2);
+  if (current instanceof HTMLImageElement) detect(current, current.naturalWidth, current.naturalHeight);
+};
+
+(async () => {
+  try {
+    session = await ort.InferenceSession.create("models/yolo11n.onnx", { executionProviders: ["wasm"] });
+    $("status").textContent = "Model ready. Pick a photo, upload one, or point your phone camera at a road.";
+    document.querySelector(".thumbs img").click();
+  } catch (e) {
+    $("status").textContent = "Could not load the model: " + e.message;
+  }
+})();
+</script>
+</body>
+</html>

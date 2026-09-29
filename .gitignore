@@ -10,3 +10,6 @@ data/
 runs/
 logs/
 *.pt
+
+# built by `python -m src.export_web`; published on the gh-pages branch
+web/models/
