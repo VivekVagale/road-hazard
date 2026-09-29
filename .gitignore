@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# dataset: downloaded and rebuilt by the code
+data/
+
+# training runs are large; results/ keeps the numbers
+runs/
+logs/
+*.pt
