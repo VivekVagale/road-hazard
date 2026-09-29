@@ -1,0 +1,9 @@
+# GPU build on Windows:  uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+torch>=2.4
+torchvision>=0.19
+ultralytics>=8.3
+opencv-python>=4.9
+remotezip>=0.12
+requests>=2.31
+streamlit>=1.38
+pytest>=8.0
