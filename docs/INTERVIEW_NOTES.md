@@ -74,6 +74,19 @@ epochs" fired on noise. It also skipped the final 10 epochs where mosaic
 augmentation is turned off, which usually helps. Retrained with early
 stopping off; first-run numbers are kept in `results/first_run/`.
 
+**Bigger model, no gain (and a second noisy-validation trap).** YOLO11s
+(9.4M parameters) was expected to beat nano (2.6M). Its "best" checkpoint,
+chosen by validation fitness at epoch 32, scored mAP@0.5 0.299 on test, far
+below nano's 0.386. The training curves showed why this was suspicious: both
+models reached almost the same training loss (1.68 vs 1.71), so the bigger one
+was not learning more, and its validation loss crept up at the end. Scoring
+the final-epoch weights gave 0.379 for small and 0.392 for nano. Conclusions:
+(1) the 775-image validation set is too noisy to choose checkpoints, not just
+to early-stop; (2) with 6,000 images and noisy crack labels, the bottleneck is
+data, not model capacity. Because the final-epoch numbers were looked at after
+the test scores, I report both rather than quietly swapping models; the
+principled fix is k-fold validation or a larger validation split.
+
 ## What I would do next
 
 1. Record my own helmet-cam footage on Bengaluru roads and label ~300 frames:
