@@ -5,78 +5,135 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Road Hazard Detection</title>
 <meta name="description" content="Pothole and road-crack detection with YOLO11, fine-tuned on Indian roads, running entirely in your browser.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛣️</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 1.5 22.5 12 12 22.5 1.5 12Z' fill='%23facc15' stroke='%23111' stroke-width='1.5'/><path d='M12 7v6M12 16.5v.5' stroke='%23111' stroke-width='2.2' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5b6270; --border: #dfe3ea; --accent: #c2410c; --on-accent: #ffffff;
-    --c0: #0077b6; --c1: #7b2cbf; --c2: #16a34a; --c3: #dc2626;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --text: #e8eaef; --muted: #9aa3b2; --border: #2a2f3a; --accent: #fb923c; --on-accent: #1a0f05;
-            --c0: #38bdf8; --c1: #c084fc; --c2: #4ade80; --c3: #f87171; }
+    --asphalt: #141619; --panel: #1b1e23; --panel-2: #22262c; --edge: #2c3139; --text: #eceef1; --muted: #a2a9b4;
+    --sign: #facc15; --on-sign: #111111; --lane: rgba(255, 255, 255, .55);
+    --c0: #38bdf8; --c1: #c084fc; --c2: #4ade80; --c3: #f87171;
+    --display: "Barlow Condensed", "Arial Narrow", sans-serif; --body: "Barlow", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 48px; }
-  h1 { font-size: 1.9rem; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-  button, label.btn { font: inherit; cursor: pointer; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--card); color: var(--text); padding: 6px 14px; font-size: .9rem; }
-  button:hover, label.btn:hover { border-color: var(--accent); }
-  button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  input[type=file] { display: none; }
-  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
-  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
-  .thumbs img.sel { border-color: var(--accent); }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; align-items: start; }
-  @media (max-width: 720px) { .stage { grid-template-columns: 1fr; } }
-  canvas { width: 100%; height: auto; border-radius: 10px; background: #000; display: block; }
-  .legend div { display: flex; align-items: center; gap: 8px; font-size: .92rem; margin: 4px 0; }
-  .sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
-  .count { margin-left: auto; font-weight: 600; }
-  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: .9rem; }
-  input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
-  #status { color: var(--muted); font-size: .9rem; }
-  .note { color: var(--muted); font-size: .88rem; }
-  a { color: var(--accent); }
-  .hidden { display: none; }
+  html { color-scheme: dark; }
+  body { margin: 0; color: var(--text); font: 16px/1.55 var(--body); min-height: 100vh; background-color: var(--asphalt);
+    background-image: radial-gradient(rgba(255,255,255,.035) 1px, transparent 1.2px), radial-gradient(rgba(0,0,0,.35) 1px, transparent 1.2px);
+    background-size: 7px 7px, 11px 11px; background-position: 0 0, 3px 5px; }
+  .caution { height: 14px; background: repeating-linear-gradient(-45deg, var(--sign) 0 18px, #111 18px 36px); }
+  main { max-width: 1100px; margin: 0 auto; padding: 26px 16px 48px; }
+  svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .diamond { width: 54px; height: 54px; flex: none; }
+  h1 { font: 800 clamp(1.9rem, 5vw, 2.8rem)/.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+  h1 span { color: var(--sign); }
+  .tag { font: 600 .9rem var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+  .lane { height: 4px; margin: 20px 0; background: repeating-linear-gradient(90deg, var(--lane) 0 34px, transparent 34px 60px); opacity: .7; }
+  .sub { color: var(--muted); max-width: 780px; margin: 0 0 18px; }
+  .sub b { color: var(--text); font-weight: 600; }
+
+  .panel { background: var(--panel); border: 2px solid var(--edge); border-radius: 8px; padding: 16px; }
+  .panel + .panel { margin-top: 16px; }
+  .plate { display: inline-flex; align-items: center; gap: 8px; font: 700 .85rem var(--display); letter-spacing: .12em; text-transform: uppercase;
+    background: var(--sign); color: var(--on-sign); padding: 3px 10px; border-radius: 4px; margin-bottom: 12px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  button, label.btn { position: relative; font: 700 1rem var(--display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+    color: var(--text); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 6px; padding: 8px 16px; min-height: 44px;
+    display: inline-flex; align-items: center; gap: 8px; transition: border-color .15s, background .15s, color .15s; }
+  button:hover, label.btn:hover { border-color: var(--sign); }
+  button.on { background: var(--sign); color: var(--on-sign); border-color: var(--sign); }
+  button:focus-visible, label.btn:focus-within, input:focus-visible { outline: 3px solid var(--sign); outline-offset: 2px; }
+  label.btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; }
+  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 5px; cursor: pointer; border: 3px solid transparent; filter: saturate(.9); }
+  .thumbs img:hover { border-color: var(--edge); }
+  .thumbs img.sel { border-color: var(--sign); filter: none; }
+  #status { color: var(--muted); font-size: .92rem; display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: start; }
+  @media (max-width: 780px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+  .screen { border: 2px solid var(--edge); border-radius: 6px; overflow: hidden; background: #000; }
+  canvas { width: 100%; height: auto; display: block; }
+  .legend { display: grid; gap: 6px; }
+  .legend div { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px;
+    background: var(--panel-2); border-radius: 5px; font: 600 1.02rem var(--display); letter-spacing: .03em; text-transform: uppercase; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; }
+  .count { font: 800 1.35rem var(--display); }
+  .ctl { margin-top: 14px; font: 700 .95rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .ctl .row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  input[type=range] { flex: 1; accent-color: var(--sign); }
+  #confV { color: var(--sign); font-size: 1.1rem; min-width: 40px; text-align: right; }
+  .note { color: var(--muted); font-size: .88rem; margin: 10px 0 0; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+  .stat { background: var(--panel); border: 2px solid var(--edge); border-left: 6px solid var(--sign); border-radius: 6px; padding: 10px 12px; }
+  .stat b { display: block; font: 800 1.7rem/1.1 var(--display); }
+  .stat span { color: var(--muted); font-size: .84rem; }
+  @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  footer { color: var(--muted); font-size: .86rem; margin-top: 18px; line-height: 1.7; }
+  a { color: var(--sign); }
+  .hidden { display: none !important; }
   video { display: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
+<div class="caution" aria-hidden="true"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 12h18"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+</svg>
 <main>
-  <h1>🛣️ Road Hazard Detection</h1>
-  <p class="sub">Finds <b>potholes</b> and <b>road cracks</b>. A YOLO11 detector fine-tuned on 6,000 real Indian road images,
-    running <b>in your browser</b>: images and camera frames never leave your device.</p>
+  <header>
+    <svg class="diamond" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.2 22.8 12 12 22.8 1.2 12Z" fill="#facc15" stroke="#111" stroke-width="1.2"/>
+      <path d="M12 7v6M12 16.4v.4" stroke="#111" stroke-width="2.2" stroke-linecap="round"/></svg>
+    <div><h1>Road <span>Hazard</span> Detection</h1>
+      <div class="tag">Potholes · cracks · Indian roads · YOLO11 in your browser</div></div>
+  </header>
+  <div class="lane" aria-hidden="true"></div>
+  <p class="sub">A <b>YOLO11</b> object detector fine-tuned on <b>6,000 real Indian road photos</b> (RDD2022) finds potholes and
+    three kinds of cracks. It runs <b>on this device</b>: photos and camera frames are never uploaded.</p>
 
-  <div class="card">
+  <section class="panel">
+    <span class="plate"><svg class="i"><use href="#i-img"/></svg>Input</span>
     <div class="tabs">
-      <button id="tSample" class="on">Sample road photos</button>
-      <label class="btn">Upload photo<input type="file" id="fImg" accept="image/*"></label>
-      <label class="btn">Upload video<input type="file" id="fVid" accept="video/*"></label>
-      <button id="tCam">Live camera</button>
+      <button id="tSample" class="on"><svg class="i"><use href="#i-img"/></svg>Sample roads</button>
+      <label class="btn"><svg class="i"><use href="#i-up"/></svg>Upload photo<input type="file" id="fImg" accept="image/*" aria-label="Upload a road photo"></label>
+      <label class="btn"><svg class="i"><use href="#i-film"/></svg>Upload video<input type="file" id="fVid" accept="video/*" aria-label="Upload a road video"></label>
+      <button id="tCam"><svg class="i"><use href="#i-cam"/></svg>Live camera</button>
     </div>
     <div id="thumbs" class="thumbs"></div>
-    <div class="row"><span id="status">Loading model (10 MB, once)...</span></div>
-  </div>
+    <div id="status"><svg class="i"><use href="#i-cpu"/></svg><span>Loading model (10 MB, once)…</span></div>
+  </section>
 
-  <div class="card stage">
-    <canvas id="cv" width="640" height="640"></canvas>
+  <section class="panel stage">
+    <div class="screen"><canvas id="cv" width="640" height="640"></canvas></div>
     <div>
+      <span class="plate">Detected</span>
       <div class="legend" id="legend"></div>
-      <div class="row">Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25"> <span id="confV">0.25</span></div>
+      <div class="ctl">Confidence<div class="row"><input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25" aria-label="Confidence threshold"><span id="confV">0.25</span></div></div>
       <p class="note" id="timing"></p>
       <p class="note">Lower confidence finds more damage but adds false boxes.</p>
     </div>
-  </div>
+  </section>
   <video id="vid" playsinline muted></video>
 
-  <p class="note">Sample photos are held-out test images the model never trained on, from the
+  <div class="stats">
+    <div class="stat"><b>0.386</b><span>mAP@0.5 on 775 test images</span></div>
+    <div class="stat"><b>0.43</b><span>pothole AP@0.5</span></div>
+    <div class="stat"><b>+44%</b><span>from one training fix</span></div>
+    <div class="stat"><b>10 MB</b><span>model, runs offline</span></div>
+  </div>
+
+  <footer>Sample photos are held-out test images the model never trained on, from the
     <a href="https://doi.org/10.6084/m9.figshare.21431547">RDD2022 dataset</a> (Arya et al., CC BY 4.0), India subset.
-    Cracks are hard: thin and long, so boxes vary a lot between annotators. Model accuracy per class is in the repo.
-    <br>Code and results: <a href="https://github.com/VivekVagale/road-hazard">github.com/VivekVagale/road-hazard</a> · by Vivek Vagale</p>
+    Cracks are hard: thin and long, so boxes vary a lot between annotators. Per-class accuracy is in the repo.
+    <br>Code and results: <a href="https://github.com/VivekVagale/road-hazard">github.com/VivekVagale/road-hazard</a> · by Vivek Vagale</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
@@ -85,6 +142,7 @@ const NAMES = ["longitudinal crack", "transverse crack", "alligator crack", "pot
 const COLORS = () => [0, 1, 2, 3].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--c${i}`).trim());
 const SIZE = 640, N_SAMPLES = 12;
 const $ = (id) => document.getElementById(id);
+const setStatus = (text) => ($("status").lastElementChild.textContent = text);
 const cv = $("cv"), ctx = cv.getContext("2d");
 let session, conf = 0.25, current = null, camStream = null, looping = false;
 
@@ -132,15 +190,15 @@ function decode(out, lb, w, h) {
 function draw(src, w, h, dets) {
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   ctx.drawImage(src, 0, 0, w, h);
-  const col = COLORS(), lw = Math.max(2, Math.round(w / 300)), fs = Math.max(12, Math.round(w / 45));
-  ctx.font = `600 ${fs}px system-ui, sans-serif`;
+  const col = COLORS(), lw = Math.max(2, Math.round(w / 280)), fs = Math.max(13, Math.round(w / 40));
+  ctx.font = `700 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
   for (const d of dets) {
     const [x1, y1, x2, y2] = d.box;
     ctx.strokeStyle = col[d.cls]; ctx.lineWidth = lw; ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-    const label = `${NAMES[d.cls]} ${Math.round(d.score * 100)}%`, tw = ctx.measureText(label).width + 8;
+    const label = `${NAMES[d.cls].toUpperCase()} ${Math.round(d.score * 100)}%`, tw = ctx.measureText(label).width + 10;
     const ty = y1 > fs + 6 ? y1 - fs - 6 : y1;
     ctx.fillStyle = col[d.cls]; ctx.fillRect(x1, ty, tw, fs + 6);
-    ctx.fillStyle = "#000"; ctx.fillText(label, x1 + 4, ty + fs);
+    ctx.fillStyle = "#000"; ctx.fillText(label, x1 + 5, ty + fs);
   }
   const counts = [0, 0, 0, 0]; dets.forEach((d) => counts[d.cls]++);
   $("legend").innerHTML = NAMES.map((n, i) =>
@@ -200,7 +258,7 @@ $("tCam").onclick = async () => {
   stopLoops(); $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on");
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-  } catch (err) { $("status").textContent = "Camera not available: " + err.message; return; }
+  } catch (err) { setStatus("Camera not available: " + err.message); return; }
   const v = $("vid"); v.src = ""; v.srcObject = camStream; await v.play();
   $("tCam").classList.add("on"); loop();
 };
@@ -212,10 +270,10 @@ $("conf").oninput = (e) => {
 (async () => {
   try {
     session = await ort.InferenceSession.create("models/yolo11n.onnx", { executionProviders: ["wasm"] });
-    $("status").textContent = "Model ready. Pick a photo, upload one, or point your phone camera at a road.";
+    setStatus("Model ready. Pick a road, upload a photo, or point your phone camera at a road.");
     document.querySelector(".thumbs img").click();
   } catch (e) {
-    $("status").textContent = "Could not load the model: " + e.message;
+    setStatus("Could not load the model: " + e.message);
   }
 })();
 </script>
