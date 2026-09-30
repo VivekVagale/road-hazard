@@ -79,8 +79,16 @@
   .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; border: 3px solid transparent; }
   .thumbs img:hover { border-color: var(--edge); }
   .thumbs img.sel { border-color: var(--sign); }
-  .thumbs .up { aspect-ratio: 1; border: 2px dashed var(--edge); border-radius: 4px; display: grid; place-items: center; color: var(--muted);
-    font: 700 .7rem var(--display); letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+  /* the "+" box: drop here, click to browse, or Paste */
+  .addbox { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-bottom: 10px;
+    min-height: 62px; padding: 8px 10px; border: 2px dashed #4a505a; border-radius: 8px; background: rgba(250, 204, 21, .03);
+    cursor: pointer; transition: border-color .15s, background .15s; }
+  .addbox:hover, .addbox:focus-visible, .addbox.over { border-color: var(--sign); background: rgba(250, 204, 21, .09); outline: none; }
+  .addbox .plus { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--sign); color: var(--on-sign); }
+  .addbox .plus svg.i { width: 22px; height: 22px; stroke-width: 3; }
+  .addbox b { display: block; font: 800 1.05rem/1.15 var(--display); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  .addbox small { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+  .addbox .paste { min-height: 34px; padding: 3px 9px; font-size: .82rem; gap: 5px; }
   #status { color: var(--muted); font-size: .8rem; display: flex; gap: 6px; align-items: center; }
 
   /* drop overlay */
@@ -105,7 +113,7 @@
     .side { height: auto; }
     .legend { grid-template-columns: 1fr 1fr; }
     .thumbs { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding-bottom: 4px; }
-    .thumbs img, .thumbs .up { width: 76px; flex: none; scroll-snap-align: start; }
+    .thumbs img { width: 76px; flex: none; scroll-snap-align: start; }
     .about { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .credit { grid-column: 1 / -1; }
     .hint.desk { display: none; }
@@ -121,6 +129,7 @@
   <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
   <symbol id="i-cam" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
   <symbol id="i-save" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
   <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
@@ -162,6 +171,11 @@
         <div class="ctl">Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25" aria-label="Confidence threshold"><span id="confV">0.25</span></div>
       </div>
       <div class="card samples">
+        <div class="addbox" id="addbox" role="button" tabindex="0" aria-label="Add a photo or video: drop it here, click to browse, or paste">
+          <span class="plus" aria-hidden="true"><svg class="i"><use href="#i-plus"/></svg></span>
+          <span><b>Drop or paste</b><small>photo or video · or click</small></span>
+          <button class="paste" id="pasteBtn" type="button"><svg class="i"><use href="#i-clip"/></svg>Paste</button>
+        </div>
         <span class="plate">Sample roads</span>
         <div id="thumbs" class="thumbs"></div>
         <div id="status" style="margin-top:8px"><svg class="i"><use href="#i-cpu"/></svg><span>Loading model (10 MB, once)…</span></div>
@@ -465,6 +479,30 @@ window.addEventListener("drop", (e) => {
   e.preventDefault(); dragDepth = 0; $("drop").classList.remove("show");
   handleFile(e.dataTransfer.files[0]);
 });
+
+// the "+" box: click or Enter to browse, glows while a file is dragged over it
+const addbox = $("addbox");
+addbox.onclick = (e) => { if (!e.target.closest("#pasteBtn")) $("fAny").click(); };
+addbox.onkeydown = (e) => { if (e.target === addbox && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); $("fAny").click(); } };
+addbox.addEventListener("dragover", () => addbox.classList.add("over"));
+addbox.addEventListener("dragleave", () => addbox.classList.remove("over"));
+window.addEventListener("drop", () => addbox.classList.remove("over"));
+
+// Paste button: reads the clipboard directly (needed on phones, where there is no Ctrl+V);
+// the browser asks for permission the first time
+$("pasteBtn").onclick = async () => {
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find((t) => t.startsWith("image/") || t.startsWith("video/"));
+      if (type) return handleFile(new File([await item.getType(type)], "Pasted image", { type }));
+    }
+    const text = (await navigator.clipboard.readText()).trim();
+    if (/^https?:\/\/\S+$/i.test(text)) { stopLoops(); setMode("Pasted link"); return await showImage(text); }
+    setStatus("Nothing to paste: copy a photo first.");
+  } catch {
+    setStatus("This browser blocked the Paste button. Press Ctrl+V anywhere on the page instead.");
+  }
+};
 
 $("tCam").onclick = async () => {
   if (camStream) { stopLoops(); return pickSample(sampleIdx); }
