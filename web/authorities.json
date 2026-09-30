@@ -1,0 +1,14 @@
+{
+  "note": "X (Twitter) handles of bodies responsible for city roads, for tagging in public reports. Handles change (Bengaluru's BBMP was reorganised into the Greater Bengaluru Authority in 2025), so the app always lets the user edit tags and asks them to check before posting. Add a city by adding an entry; 'match' lists lowercase names that OpenStreetMap may return for it.",
+  "last_reviewed": "2026-09",
+  "cities": [
+    { "name": "Bengaluru", "match": ["bengaluru", "bangalore", "bengaluru urban", "greater bengaluru"], "civic": ["@BBMPCOMM"], "traffic": ["@blrcitytraffic"] },
+    { "name": "Mumbai", "match": ["mumbai", "greater mumbai", "mumbai suburban"], "civic": ["@mybmc"], "traffic": ["@MTPHereToHelp"] },
+    { "name": "Delhi", "match": ["delhi", "new delhi", "south delhi", "north delhi", "east delhi", "west delhi"], "civic": ["@MCD_Delhi"], "traffic": ["@dtptraffic"] },
+    { "name": "Chennai", "match": ["chennai"], "civic": ["@chennaicorp"], "traffic": ["@ChennaiTraffic"] },
+    { "name": "Hyderabad", "match": ["hyderabad", "secunderabad"], "civic": ["@GHMCOnline"], "traffic": ["@HYDTP"] },
+    { "name": "Pune", "match": ["pune", "pimpri-chinchwad"], "civic": ["@PMCPune"], "traffic": ["@PuneCityTraffic"] }
+  ],
+  "national_highways": ["@NHAI_Official", "@MORTHIndia"],
+  "hashtags": ["#RoadSafety", "#Potholes", "#FixMyRoad"]
+}

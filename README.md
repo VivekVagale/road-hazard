@@ -10,6 +10,16 @@ photo (Ctrl+V), drag and drop a photo or video, or open it on a phone and point
 the camera at a road. **Save** downloads the marked-up photo with a branded
 footer listing what was found.
 
+**Report a hazard** (public awareness): the app reads the photo's GPS and
+capture time from its EXIF data (phones and most dashcams write them), turns
+the coordinates into "road, area, city" with OpenStreetMap, tags that city's
+civic body and traffic police on X (from `web/authorities.json`, editable,
+marked "check before posting"), and writes a ready-to-post caption with the
+location, date, counts and hashtags, counted against X's 280 limit. On phones,
+**Share** sends the photo and caption straight to X, Instagram or WhatsApp;
+on desktop, **Post on X** opens a pre-filled post. Nothing is posted
+automatically: a person always reviews the tags and the photo first.
+
 Fixing one training mistake (early stopping on a noisy validation set) raised
 mAP@0.5 from 0.267 to 0.386, a 44% gain, with no model change. A 3.6x bigger
 model (YOLO11s) did **not** do better: the limit here is data, not model size.
