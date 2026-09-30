@@ -5,8 +5,10 @@ video, using a YOLO11 detector fine-tuned on **7,706 real Indian road images**
 (RDD2022, India subset).
 
 **Live demo: https://vivekvagale.github.io/road-hazard/** : runs in your
-browser (ONNX + WebAssembly, 10 MB). Try the sample photos, upload your own,
-or open it on a phone and point the camera at a road.
+browser (ONNX + WebAssembly, 10 MB). Flip through the sample roads, paste a
+photo (Ctrl+V), drag and drop a photo or video, or open it on a phone and point
+the camera at a road. **Save** downloads the marked-up photo with a branded
+footer listing what was found.
 
 Fixing one training mistake (early stopping on a noisy validation set) raised
 mAP@0.5 from 0.267 to 0.386, a 44% gain, with no model change. A 3.6x bigger

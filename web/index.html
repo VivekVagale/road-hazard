@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Road Hazard Detection</title>
-<meta name="description" content="Pothole and road-crack detection with YOLO11, fine-tuned on Indian roads, running entirely in your browser.">
+<meta name="description" content="Pothole and road-crack detection on Indian roads. Paste, drop or upload a photo or video and save the marked-up result.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 1.5 22.5 12 12 22.5 1.5 12Z' fill='%23facc15' stroke='%23111' stroke-width='1.5'/><path d='M12 7v6M12 16.5v.5' stroke='%23111' stroke-width='2.2' stroke-linecap='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,70 +12,105 @@
 <style>
   :root {
     --asphalt: #141619; --panel: #1b1e23; --panel-2: #22262c; --edge: #2c3139; --text: #eceef1; --muted: #a2a9b4;
-    --sign: #facc15; --on-sign: #111111; --lane: rgba(255, 255, 255, .55);
+    --sign: #facc15; --on-sign: #111111; --lane: rgba(255, 255, 255, .5);
     --c0: #38bdf8; --c1: #c084fc; --c2: #4ade80; --c3: #f87171;
     --display: "Barlow Condensed", "Arial Narrow", sans-serif; --body: "Barlow", system-ui, sans-serif;
+    --viewer-h: clamp(320px, calc(100vh - 150px), 820px);
   }
   * { box-sizing: border-box; }
   html { color-scheme: dark; }
-  body { margin: 0; color: var(--text); font: 16px/1.55 var(--body); min-height: 100vh; background-color: var(--asphalt);
+  body { margin: 0; color: var(--text); font: 15px/1.5 var(--body); min-height: 100vh; background-color: var(--asphalt);
     background-image: radial-gradient(rgba(255,255,255,.035) 1px, transparent 1.2px), radial-gradient(rgba(0,0,0,.35) 1px, transparent 1.2px);
     background-size: 7px 7px, 11px 11px; background-position: 0 0, 3px 5px; }
-  .caution { height: 14px; background: repeating-linear-gradient(-45deg, var(--sign) 0 18px, #111 18px 36px); }
-  main { max-width: 1100px; margin: 0 auto; padding: 26px 16px 48px; }
+  .caution { height: 8px; background: repeating-linear-gradient(-45deg, var(--sign) 0 14px, #111 14px 28px); }
+  main { max-width: 1400px; margin: 0 auto; padding: 12px 16px 28px; }
   svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .diamond { width: 54px; height: 54px; flex: none; }
-  h1 { font: 800 clamp(1.9rem, 5vw, 2.8rem)/.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+  /* header + toolbar in one compact row */
+  .top { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .diamond { width: 34px; height: 34px; flex: none; }
+  h1 { font: 800 1.55rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; white-space: nowrap; }
   h1 span { color: var(--sign); }
-  .tag { font: 600 .9rem var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
-  .lane { height: 4px; margin: 20px 0; background: repeating-linear-gradient(90deg, var(--lane) 0 34px, transparent 34px 60px); opacity: .7; }
-  .sub { color: var(--muted); max-width: 780px; margin: 0 0 18px; }
-  .sub b { color: var(--text); font-weight: 600; }
-
-  .panel { background: var(--panel); border: 2px solid var(--edge); border-radius: 8px; padding: 16px; }
-  .panel + .panel { margin-top: 16px; }
-  .plate { display: inline-flex; align-items: center; gap: 8px; font: 700 .85rem var(--display); letter-spacing: .12em; text-transform: uppercase;
-    background: var(--sign); color: var(--on-sign); padding: 3px 10px; border-radius: 4px; margin-bottom: 12px; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-  button, label.btn { position: relative; font: 700 1rem var(--display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
-    color: var(--text); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 6px; padding: 8px 16px; min-height: 44px;
-    display: inline-flex; align-items: center; gap: 8px; transition: border-color .15s, background .15s, color .15s; }
+  .tag { font: 600 .74rem var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .spacer { flex: 1; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button, label.btn { position: relative; font: 700 .95rem var(--display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+    color: var(--text); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 6px; padding: 6px 12px; min-height: 40px;
+    display: inline-flex; align-items: center; gap: 7px; transition: border-color .15s, background .15s, color .15s; }
   button:hover, label.btn:hover { border-color: var(--sign); }
   button.on { background: var(--sign); color: var(--on-sign); border-color: var(--sign); }
+  button.save { border-color: var(--sign); color: var(--sign); }
+  button.save:hover:not(:disabled) { background: var(--sign); color: var(--on-sign); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   button:focus-visible, label.btn:focus-within, input:focus-visible { outline: 3px solid var(--sign); outline-offset: 2px; }
   label.btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; }
-  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 5px; cursor: pointer; border: 3px solid transparent; filter: saturate(.9); }
+  .hint { font-size: .82rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  kbd { font: 600 .75rem var(--body); border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
+
+  /* workbench: viewer left, sidebar right, both one screen tall */
+  .bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+  .viewer { position: relative; height: var(--viewer-h); background: #000; border: 2px solid var(--edge); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .viewer canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
+  .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 58px; padding: 0; justify-content: center;
+    background: rgba(17, 17, 17, .6); border-color: transparent; }
+  .nav:hover { background: var(--sign); color: var(--on-sign); }
+  .nav.prev { left: 8px; } .nav.next { right: 8px; }
+  .chip { position: absolute; left: 10px; bottom: 10px; font: 600 .82rem var(--body); background: rgba(17, 17, 17, .72);
+    padding: 3px 9px; border-radius: 5px; color: var(--muted); pointer-events: none; }
+  .chip b { color: var(--sign); font-weight: 600; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 20px; }
+
+  .side { height: var(--viewer-h); display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .card { background: var(--panel); border: 2px solid var(--edge); border-radius: 8px; padding: 10px; }
+  .plate { display: inline-flex; align-items: center; gap: 6px; font: 700 .76rem var(--display); letter-spacing: .12em; text-transform: uppercase;
+    background: var(--sign); color: var(--on-sign); padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+  .legend { display: grid; gap: 4px; }
+  .legend div { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; padding: 4px 8px;
+    background: var(--panel-2); border-radius: 5px; font: 600 .95rem var(--display); letter-spacing: .03em; text-transform: uppercase; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .count { font: 800 1.15rem var(--display); }
+  .ctl { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 700 .82rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  input[type=range] { flex: 1; accent-color: var(--sign); min-width: 0; }
+  #confV { color: var(--sign); font-size: 1rem; min-width: 34px; text-align: right; }
+  .samples { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .thumbs { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-content: start; padding-right: 2px; }
+  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; border: 3px solid transparent; }
   .thumbs img:hover { border-color: var(--edge); }
-  .thumbs img.sel { border-color: var(--sign); filter: none; }
-  #status { color: var(--muted); font-size: .92rem; display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .thumbs img.sel { border-color: var(--sign); }
+  .thumbs .up { aspect-ratio: 1; border: 2px dashed var(--edge); border-radius: 4px; display: grid; place-items: center; color: var(--muted);
+    font: 700 .7rem var(--display); letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+  #status { color: var(--muted); font-size: .8rem; display: flex; gap: 6px; align-items: center; }
 
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: start; }
-  @media (max-width: 780px) { .stage { grid-template-columns: minmax(0, 1fr); } }
-  .screen { border: 2px solid var(--edge); border-radius: 6px; overflow: hidden; background: #000; }
-  canvas { width: 100%; height: auto; display: block; }
-  .legend { display: grid; gap: 6px; }
-  .legend div { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px;
-    background: var(--panel-2); border-radius: 5px; font: 600 1.02rem var(--display); letter-spacing: .03em; text-transform: uppercase; }
-  .sw { width: 14px; height: 14px; border-radius: 3px; }
-  .count { font: 800 1.35rem var(--display); }
-  .ctl { margin-top: 14px; font: 700 .95rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  .ctl .row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
-  input[type=range] { flex: 1; accent-color: var(--sign); }
-  #confV { color: var(--sign); font-size: 1.1rem; min-width: 40px; text-align: right; }
-  .note { color: var(--muted); font-size: .88rem; margin: 10px 0 0; }
+  /* drop overlay */
+  .drop { position: fixed; inset: 0; z-index: 20; background: rgba(20, 22, 25, .86); display: none; place-items: center; }
+  .drop.show { display: grid; }
+  .drop div { border: 4px dashed var(--sign); border-radius: 14px; padding: 36px 48px; text-align: center; font: 800 2rem var(--display);
+    text-transform: uppercase; letter-spacing: .04em; }
+  .drop small { display: block; font: 500 1rem var(--body); text-transform: none; letter-spacing: 0; color: var(--muted); margin-top: 6px; }
 
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
-  .stat { background: var(--panel); border: 2px solid var(--edge); border-left: 6px solid var(--sign); border-radius: 6px; padding: 10px 12px; }
-  .stat b { display: block; font: 800 1.7rem/1.1 var(--display); }
-  .stat span { color: var(--muted); font-size: .84rem; }
-  @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  footer { color: var(--muted); font-size: .86rem; margin-top: 18px; line-height: 1.7; }
+  .about { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 2fr; gap: 8px; margin-top: 12px; align-items: stretch; }
+  .stat { background: var(--panel); border: 2px solid var(--edge); border-left: 5px solid var(--sign); border-radius: 6px; padding: 6px 10px; }
+  .stat b { display: block; font: 800 1.3rem/1.1 var(--display); }
+  .stat span { color: var(--muted); font-size: .78rem; }
+  .credit { color: var(--muted); font-size: .8rem; line-height: 1.5; align-self: center; }
   a { color: var(--sign); }
   .hidden { display: none !important; }
   video { display: none; }
+
+  @media (max-width: 860px) {
+    :root { --viewer-h: min(62vh, 520px); }
+    .bench { grid-template-columns: minmax(0, 1fr); }
+    .side { height: auto; }
+    .legend { grid-template-columns: 1fr 1fr; }
+    .thumbs { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+    .thumbs img, .thumbs .up { width: 76px; flex: none; scroll-snap-align: start; }
+    .about { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .credit { grid-column: 1 / -1; }
+    .hint.desk { display: none; }
+    .samples { order: -1; }
+  }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -84,56 +119,66 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
-  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 12h18"/></symbol>
   <symbol id="i-cam" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
 </svg>
+
+<div class="drop" id="drop" aria-hidden="true"><div>Drop it<small>A road photo or video. It stays on this device.</small></div></div>
+
 <main>
-  <header>
-    <svg class="diamond" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.2 22.8 12 12 22.8 1.2 12Z" fill="#facc15" stroke="#111" stroke-width="1.2"/>
-      <path d="M12 7v6M12 16.4v.4" stroke="#111" stroke-width="2.2" stroke-linecap="round"/></svg>
-    <div><h1>Road <span>Hazard</span> Detection</h1>
-      <div class="tag">Potholes · cracks · Indian roads · YOLO11 in your browser</div></div>
-  </header>
-  <div class="lane" aria-hidden="true"></div>
-  <p class="sub">A <b>YOLO11</b> object detector fine-tuned on <b>6,000 real Indian road photos</b> (RDD2022) finds potholes and
-    three kinds of cracks. It runs <b>on this device</b>: photos and camera frames are never uploaded.</p>
-
-  <section class="panel">
-    <span class="plate"><svg class="i"><use href="#i-img"/></svg>Input</span>
-    <div class="tabs">
-      <button id="tSample" class="on"><svg class="i"><use href="#i-img"/></svg>Sample roads</button>
-      <label class="btn"><svg class="i"><use href="#i-up"/></svg>Upload photo<input type="file" id="fImg" accept="image/*" aria-label="Upload a road photo"></label>
-      <label class="btn"><svg class="i"><use href="#i-film"/></svg>Upload video<input type="file" id="fVid" accept="video/*" aria-label="Upload a road video"></label>
-      <button id="tCam"><svg class="i"><use href="#i-cam"/></svg>Live camera</button>
+  <div class="top">
+    <div class="brand">
+      <svg class="diamond" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.2 22.8 12 12 22.8 1.2 12Z" fill="#facc15" stroke="#111" stroke-width="1.2"/>
+        <path d="M12 7v6M12 16.4v.4" stroke="#111" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <div><h1>Road <span>Hazard</span> Detection</h1><div class="tag">Potholes · cracks · Indian roads</div></div>
     </div>
-    <div id="thumbs" class="thumbs"></div>
-    <div id="status"><svg class="i"><use href="#i-cpu"/></svg><span>Loading model (10 MB, once)…</span></div>
-  </section>
-
-  <section class="panel stage">
-    <div class="screen"><canvas id="cv" width="640" height="640"></canvas></div>
-    <div>
-      <span class="plate">Detected</span>
-      <div class="legend" id="legend"></div>
-      <div class="ctl">Confidence<div class="row"><input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25" aria-label="Confidence threshold"><span id="confV">0.25</span></div></div>
-      <p class="note" id="timing"></p>
-      <p class="note">Lower confidence finds more damage but adds false boxes.</p>
+    <div class="spacer"></div>
+    <div class="tools">
+      <button id="tSample" class="on"><svg class="i"><use href="#i-img"/></svg>Samples</button>
+      <label class="btn"><svg class="i"><use href="#i-up"/></svg>Upload<input type="file" id="fAny" accept="image/*,video/*" aria-label="Upload a road photo or video"></label>
+      <button id="tCam"><svg class="i"><use href="#i-cam"/></svg>Camera</button>
+      <button id="save" class="save" disabled><svg class="i"><use href="#i-save"/></svg>Save</button>
+      <span class="hint desk"><svg class="i"><use href="#i-clip"/></svg>or <kbd>Ctrl</kbd>+<kbd>V</kbd> / drop anywhere · <kbd>←</kbd><kbd>→</kbd> samples</span>
     </div>
-  </section>
+  </div>
+
+  <div class="bench">
+    <div class="viewer" id="viewer">
+      <canvas id="cv" width="640" height="640" aria-label="Detection result"></canvas>
+      <div class="empty" id="empty">Loading the model…</div>
+      <button class="nav prev" id="prev" aria-label="Previous sample"><svg class="i"><use href="#i-left"/></svg></button>
+      <button class="nav next" id="next" aria-label="Next sample"><svg class="i"><use href="#i-right"/></svg></button>
+      <span class="chip" id="timing"></span>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <span class="plate">Detected</span>
+        <div class="legend" id="legend"></div>
+        <div class="ctl">Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25" aria-label="Confidence threshold"><span id="confV">0.25</span></div>
+      </div>
+      <div class="card samples">
+        <span class="plate">Sample roads</span>
+        <div id="thumbs" class="thumbs"></div>
+        <div id="status" style="margin-top:8px"><svg class="i"><use href="#i-cpu"/></svg><span>Loading model (10 MB, once)…</span></div>
+      </div>
+    </aside>
+  </div>
   <video id="vid" playsinline muted></video>
 
-  <div class="stats">
-    <div class="stat"><b>0.386</b><span>mAP@0.5 on 775 test images</span></div>
+  <div class="about">
+    <div class="stat"><b>0.386</b><span>mAP@0.5, 775 test images</span></div>
     <div class="stat"><b>0.43</b><span>pothole AP@0.5</span></div>
     <div class="stat"><b>+44%</b><span>from one training fix</span></div>
     <div class="stat"><b>10 MB</b><span>model, runs offline</span></div>
+    <div class="credit">Samples are held-out test images from <a href="https://doi.org/10.6084/m9.figshare.21431547">RDD2022</a>
+      (Arya et al., CC BY 4.0), India subset. Photos and frames never leave your device.
+      Code and results: <a href="https://github.com/VivekVagale/road-hazard">github.com/VivekVagale/road-hazard</a> · by Vivek Vagale</div>
   </div>
-
-  <footer>Sample photos are held-out test images the model never trained on, from the
-    <a href="https://doi.org/10.6084/m9.figshare.21431547">RDD2022 dataset</a> (Arya et al., CC BY 4.0), India subset.
-    Cracks are hard: thin and long, so boxes vary a lot between annotators. Per-class accuracy is in the repo.
-    <br>Code and results: <a href="https://github.com/VivekVagale/road-hazard">github.com/VivekVagale/road-hazard</a> · by Vivek Vagale</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
@@ -144,7 +189,7 @@ const SIZE = 640, N_SAMPLES = 12;
 const $ = (id) => document.getElementById(id);
 const setStatus = (text) => ($("status").lastElementChild.textContent = text);
 const cv = $("cv"), ctx = cv.getContext("2d");
-let session, conf = 0.25, current = null, camStream = null, looping = false;
+let session, conf = 0.25, current = null, camStream = null, looping = false, sampleIdx = 0, source = "sample", lastDets = null;
 
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
 
@@ -211,16 +256,127 @@ async function detect(src, w, h) {
   const out = (await session.run({ images: lb.tensor })).output0;
   const dets = decode(out, lb, w, h);
   draw(src, w, h, dets);
-  $("timing").textContent = `${Math.round(performance.now() - t0)} ms per frame on this device`;
+  lastDets = dets; $("save").disabled = false;
+  $("empty").classList.add("hidden");
+  const label = source === "sample" ? `Sample ${sampleIdx + 1} of ${N_SAMPLES}` : source === "camera" ? "Live camera" : source;
+  $("timing").innerHTML = `<b>${label}</b> · ${Math.round(performance.now() - t0)} ms`;
   return dets;
+}
+
+// onload instead of img.decode(): decode() never settles while the tab is in the background
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("could not load that image"));
+    img.src = url;
+  });
 }
 
 async function showImage(url) {
   stopLoops();
-  const img = new Image(); img.src = url; await img.decode();
+  const img = await loadImage(url);
   current = img;
   await detect(img, img.naturalWidth, img.naturalHeight);
 }
+
+// ---------- save: the marked-up photo with a white dock underneath ----------
+function stripe(g, x, y, w, h) {
+  g.save();
+  g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = "#111"; g.fillRect(x, y, w, h);
+  g.fillStyle = "#facc15";
+  for (let s = x - h; s < x + w + h; s += h * 2) {
+    g.beginPath(); g.moveTo(s, y + h); g.lineTo(s + h, y); g.lineTo(s + 2 * h, y); g.lineTo(s + h, y + h); g.fill();
+  }
+  g.restore();
+}
+
+function diamond(g, cx, cy, r) {
+  g.save();
+  g.beginPath(); g.moveTo(cx, cy - r); g.lineTo(cx + r, cy); g.lineTo(cx, cy + r); g.lineTo(cx - r, cy); g.closePath();
+  g.fillStyle = "#facc15"; g.fill(); g.lineWidth = Math.max(1.5, r * 0.07); g.strokeStyle = "#111"; g.stroke();
+  g.lineCap = "round"; g.lineWidth = r * 0.18;
+  g.beginPath(); g.moveTo(cx, cy - r * 0.45); g.lineTo(cx, cy + r * 0.12); g.stroke();
+  g.beginPath(); g.moveTo(cx, cy + r * 0.42); g.lineTo(cx, cy + r * 0.44); g.stroke();
+  g.restore();
+}
+
+function composite() {
+  const w = cv.width, h = cv.height;
+  const u = Math.max(w, 640) / 100;              // layout unit: 1% of the width (at least 6.4 px)
+  const pad = 3 * u, stripeH = Math.round(1.6 * u);
+  const titlePx = Math.round(4.6 * u), tagPx = Math.round(2.1 * u), countPx = Math.round(2.3 * u);
+  const col = ["#0284c7", "#9333ea", "#16a34a", "#dc2626"]; // the class colours, darkened to read on white
+  const counts = [0, 0, 0, 0]; lastDets.forEach((d) => counts[d.cls]++);
+  const found = counts.map((n, i) => [n, i]).filter(([n]) => n > 0);
+
+  const out = document.createElement("canvas"), g = out.getContext("2d");
+  // measure first, to know whether the counts fit beside the title or need their own line
+  g.font = `800 ${titlePx}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const titleW = g.measureText("ROAD HAZARD DETECTION").width + titlePx * 0.4;
+  g.font = `700 ${countPx}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const items = found.length ? found.map(([n, i]) => `${n} ${NAMES[i]}${n > 1 ? "s" : ""}`.toUpperCase()) : ["NO DAMAGE FOUND"];
+  // each item is: swatch (1 countPx) + text + gap (0.9 countPx); no swatches or trailing gap when nothing was found
+  const countsW = found.length
+    ? items.reduce((a, t) => a + countPx + g.measureText(t).width + countPx * 0.9, 0) - countPx * 0.9
+    : g.measureText(items[0]).width;
+  const logoW = titlePx * 2.2;
+  const sideBySide = pad + logoW + titleW + 2 * pad + countsW <= w;
+  const dockH = Math.round(sideBySide ? 13 * u : 18 * u);
+
+  out.width = w; out.height = h + stripeH + dockH;
+  g.drawImage(cv, 0, 0);
+  stripe(g, 0, h, w, stripeH);
+  g.fillStyle = "#ffffff"; g.fillRect(0, h + stripeH, w, dockH);
+
+  const top = h + stripeH, cy = top + (sideBySide ? dockH / 2 : dockH * 0.36);
+  diamond(g, pad + titlePx * 0.8, cy, titlePx * 0.8);
+  const tx = pad + logoW;
+  g.textBaseline = "alphabetic";
+  g.font = `800 ${titlePx}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const baseline = cy + titlePx * 0.08;
+  let x = tx;
+  g.fillStyle = "#111"; g.fillText("ROAD ", x, baseline); x += g.measureText("ROAD ").width;
+  const hz = g.measureText("HAZARD").width;
+  g.fillStyle = "#facc15"; g.fillRect(x - titlePx * 0.08, baseline - titlePx * 0.8, hz + titlePx * 0.16, titlePx * 0.92);
+  g.fillStyle = "#111"; g.fillText("HAZARD", x, baseline); x += hz;
+  g.fillText(" DETECTION", x, baseline);
+  g.font = `600 ${tagPx}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  g.fillStyle = "#555b66";
+  if ("letterSpacing" in g) g.letterSpacing = `${tagPx * 0.14}px`;
+  g.fillText("POTHOLES · CRACKS · INDIAN ROADS", tx, baseline + tagPx * 1.55);
+  if ("letterSpacing" in g) g.letterSpacing = "0px";
+
+  // counts: right-aligned beside the title, or on their own line underneath
+  g.font = `700 ${countPx}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  let cx = sideBySide ? w - pad - countsW : tx;
+  const cyCounts = sideBySide ? cy + countPx * 0.35 : top + dockH * 0.8;
+  items.forEach((t, k) => {
+    if (found.length) {
+      g.fillStyle = col[found[k][1]];
+      g.fillRect(cx, cyCounts - countPx * 0.72, countPx * 0.72, countPx * 0.72);
+    }
+    const off = found.length ? countPx : 0;
+    g.fillStyle = "#111"; g.fillText(t, cx + off, cyCounts);
+    cx += off + g.measureText(t).width + countPx * 0.9;
+  });
+  return out;
+}
+
+async function save() {
+  if (!lastDets) return;
+  await document.fonts.ready;                    // draw the dock with the real signage font
+  const name = (source === "sample" ? `sample-${sampleIdx + 1}` : source === "camera" ? "camera" : source)
+    .replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9-]+/gi, "-").toLowerCase();
+  composite().toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `road-hazard-${name}.png`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, "image/png");
+}
+$("save").onclick = save;
 
 function stopLoops() {
   looping = false;
@@ -238,27 +394,85 @@ async function loop() {
   }
 }
 
-// sample thumbnails
-for (let i = 1; i <= N_SAMPLES; i++) {
-  const t = document.createElement("img");
-  t.src = `samples/${String(i).padStart(2, "0")}.jpg`; t.alt = `test road ${i}`; t.loading = "lazy";
-  t.onclick = () => { document.querySelectorAll(".thumbs img").forEach((x) => x.classList.remove("sel")); t.classList.add("sel"); showImage(t.src); };
-  $("thumbs").append(t);
+function setMode(mode) {
+  source = mode;
+  $("tSample").classList.toggle("on", mode === "sample");
+  $("prev").classList.toggle("hidden", mode !== "sample");
+  $("next").classList.toggle("hidden", mode !== "sample");
+  if (mode !== "sample") document.querySelectorAll(".thumbs img").forEach((x) => x.classList.remove("sel"));
 }
 
-$("tSample").onclick = () => { $("thumbs").classList.remove("hidden"); $("tSample").classList.add("on"); document.querySelector(".thumbs img").click(); };
-$("fImg").onchange = (e) => { const f = e.target.files[0]; if (f) { $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on"); showImage(URL.createObjectURL(f)); } };
-$("fVid").onchange = async (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  stopLoops(); $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on");
-  const v = $("vid"); v.srcObject = null; v.src = URL.createObjectURL(f); v.loop = false; await v.play(); loop();
-};
+// ---------- samples: click, arrows, or ← → keys ----------
+function pickSample(i) {
+  sampleIdx = (i + N_SAMPLES) % N_SAMPLES;
+  setMode("sample");
+  const imgs = document.querySelectorAll(".thumbs img");
+  imgs.forEach((x, k) => x.classList.toggle("sel", k === sampleIdx));
+  imgs[sampleIdx].scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (session) showImage(imgs[sampleIdx].src);
+}
+for (let i = 0; i < N_SAMPLES; i++) {
+  const t = document.createElement("img");
+  t.src = `samples/${String(i + 1).padStart(2, "0")}.jpg`; t.alt = `Sample road ${i + 1}`; t.tabIndex = 0;
+  t.onclick = () => pickSample(i);
+  t.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickSample(i); } };
+  $("thumbs").append(t);
+}
+$("prev").onclick = () => pickSample(sampleIdx - 1);
+$("next").onclick = () => pickSample(sampleIdx + 1);
+$("tSample").onclick = () => pickSample(sampleIdx);
+document.addEventListener("keydown", (e) => {
+  if ((e.target instanceof Element && e.target.matches("input, select, textarea")) || source !== "sample") return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); pickSample(sampleIdx - 1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); pickSample(sampleIdx + 1); }
+});
+
+// ---------- one entry point for every file: upload, paste or drop ----------
+async function handleFile(file) {
+  if (!file) return;
+  if (!session) { setStatus("The model is still loading, try again in a second."); return; }
+  if (file.type.startsWith("image/")) {
+    setMode(file.name ? file.name : "Pasted image");
+    await showImage(URL.createObjectURL(file));
+  } else if (file.type.startsWith("video/")) {
+    stopLoops(); setMode(file.name || "Video");
+    const v = $("vid"); v.srcObject = null; v.src = URL.createObjectURL(file); v.loop = false; await v.play(); loop();
+  } else {
+    setStatus(`That is a ${file.type || "file"} — drop a photo or a video.`);
+  }
+}
+$("fAny").onchange = (e) => { handleFile(e.target.files[0]); e.target.value = ""; };
+
+// paste: an image or video from the clipboard, or a link to an image
+document.addEventListener("paste", async (e) => {
+  const item = [...(e.clipboardData?.items ?? [])].find((it) => it.kind === "file");
+  if (item) { e.preventDefault(); return handleFile(item.getAsFile()); }
+  const text = e.clipboardData?.getData("text")?.trim();
+  if (text && /^https?:\/\/\S+$/i.test(text)) {
+    e.preventDefault();
+    try { stopLoops(); setMode("Pasted link"); await showImage(text); }
+    catch { setStatus("That site does not allow its images to be read by other pages. Save the image, then paste or drop it."); }
+  }
+});
+
+// drag and drop anywhere on the page
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+window.addEventListener("dragenter", (e) => { if (hasFiles(e)) { dragDepth++; $("drop").classList.add("show"); } });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop").classList.remove("show"); } });
+window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; $("drop").classList.remove("show");
+  handleFile(e.dataTransfer.files[0]);
+});
+
 $("tCam").onclick = async () => {
-  if (camStream) { stopLoops(); return; }
-  stopLoops(); $("thumbs").classList.add("hidden"); $("tSample").classList.remove("on");
+  if (camStream) { stopLoops(); return pickSample(sampleIdx); }
+  stopLoops();
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
   } catch (err) { setStatus("Camera not available: " + err.message); return; }
+  setMode("camera");
   const v = $("vid"); v.src = ""; v.srcObject = camStream; await v.play();
   $("tCam").classList.add("on"); loop();
 };
@@ -270,10 +484,11 @@ $("conf").oninput = (e) => {
 (async () => {
   try {
     session = await ort.InferenceSession.create("models/yolo11n.onnx", { executionProviders: ["wasm"] });
-    setStatus("Model ready. Pick a road, upload a photo, or point your phone camera at a road.");
-    document.querySelector(".thumbs img").click();
+    setStatus("Model ready.");
+    pickSample(0);
   } catch (e) {
     setStatus("Could not load the model: " + e.message);
+    $("empty").textContent = "Could not load the model.";
   }
 })();
 </script>
