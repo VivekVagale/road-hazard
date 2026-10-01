@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Road Hazard Detection</title>
+<meta name="description" content="Pothole and road-crack detection on Indian roads. Paste, drop or upload a photo or video and save the marked-up result.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 1.5 22.5 12 12 22.5 1.5 12Z' fill='%23facc15' stroke='%23111' stroke-width='1.5'/><path d='M12 7v6M12 16.5v.5' stroke='%23111' stroke-width='2.2' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --asphalt: #141619; --panel: #1b1e23; --panel-2: #22262c; --edge: #2c3139; --text: #eceef1; --muted: #a2a9b4;
+    --sign: #facc15; --on-sign: #111111; --lane: rgba(255, 255, 255, .5);
+    --c0: #38bdf8; --c1: #c084fc; --c2: #4ade80; --c3: #f87171;
+    --display: "Barlow Condensed", "Arial Narrow", sans-serif; --body: "Barlow", system-ui, sans-serif;
+    --viewer-h: clamp(320px, calc(100vh - 150px), 820px);
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body { margin: 0; color: var(--text); font: 15px/1.5 var(--body); min-height: 100vh; background-color: var(--asphalt);
+    background-image: radial-gradient(rgba(255,255,255,.035) 1px, transparent 1.2px), radial-gradient(rgba(0,0,0,.35) 1px, transparent 1.2px);
+    background-size: 7px 7px, 11px 11px; background-position: 0 0, 3px 5px; }
+  .caution { height: 8px; background: repeating-linear-gradient(-45deg, var(--sign) 0 14px, #111 14px 28px); }
+  main { max-width: 1400px; margin: 0 auto; padding: 12px 16px 28px; }
+  svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* header + toolbar in one compact row */
+  .top { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .diamond { width: 34px; height: 34px; flex: none; }
+  h1 { font: 800 1.55rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; white-space: nowrap; }
+  h1 span { color: var(--sign); }
+  .tag { font: 600 .74rem var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .spacer { flex: 1; }
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button, label.btn { position: relative; font: 700 .95rem var(--display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+    color: var(--text); background: var(--panel-2); border: 2px solid var(--edge); border-radius: 6px; padding: 6px 12px; min-height: 40px;
+    display: inline-flex; align-items: center; gap: 7px; transition: border-color .15s, background .15s, color .15s; }
+  button:hover, label.btn:hover { border-color: var(--sign); }
+  button.on { background: var(--sign); color: var(--on-sign); border-color: var(--sign); }
+  button.save { border-color: var(--sign); color: var(--sign); }
+  button.save:hover:not(:disabled) { background: var(--sign); color: var(--on-sign); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, label.btn:focus-within, input:focus-visible { outline: 3px solid var(--sign); outline-offset: 2px; }
+  label.btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .hint { font-size: .82rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  kbd { font: 600 .75rem var(--body); border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
+
+  /* workbench: viewer left, sidebar right, both one screen tall */
+  .bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+  .viewer { position: relative; height: var(--viewer-h); background: #000; border: 2px solid var(--edge); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .viewer canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
+  .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 58px; padding: 0; justify-content: center;
+    background: rgba(17, 17, 17, .6); border-color: transparent; }
+  .nav:hover { background: var(--sign); color: var(--on-sign); }
+  .nav.prev { left: 8px; } .nav.next { right: 8px; }
+  .chip { position: absolute; left: 10px; bottom: 10px; font: 600 .82rem var(--body); background: rgba(17, 17, 17, .72);
+    padding: 3px 9px; border-radius: 5px; color: var(--muted); pointer-events: none; }
+  .chip b { color: var(--sign); font-weight: 600; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 20px; }
+
+  .side { height: var(--viewer-h); display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+  .card { background: var(--panel); border: 2px solid var(--edge); border-radius: 8px; padding: 10px; }
+  .plate { display: inline-flex; align-items: center; gap: 6px; font: 700 .76rem var(--display); letter-spacing: .12em; text-transform: uppercase;
+    background: var(--sign); color: var(--on-sign); padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+  .legend { display: grid; gap: 4px; }
+  .legend div { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; padding: 4px 8px;
+    background: var(--panel-2); border-radius: 5px; font: 600 .95rem var(--display); letter-spacing: .03em; text-transform: uppercase; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .count { font: 800 1.15rem var(--display); }
+  .ctl { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 700 .82rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  input[type=range] { flex: 1; accent-color: var(--sign); min-width: 0; }
+  #confV { color: var(--sign); font-size: 1rem; min-width: 34px; text-align: right; }
+  .samples { flex: 1 0 210px; min-height: 210px; display: flex; flex-direction: column; }
+  .none { margin: 8px 0 0; padding: 6px 8px; border-left: 3px solid var(--sign); background: var(--panel-2); border-radius: 4px; color: var(--muted); font-size: .85rem; line-height: 1.45; }
+  .sharebox { margin-top: 8px; padding-top: 8px; border-top: 2px dashed var(--edge); }
+  .capprev { margin: 0 0 8px; white-space: pre-line; font-size: .85rem; line-height: 1.45; color: var(--text); background: var(--panel-2); border-radius: 5px; padding: 6px 8px;
+    max-height: 4.5em; overflow-y: auto; overflow-wrap: anywhere; }
+  .shareacts { display: flex; gap: 6px; }
+  .shareacts button { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+  .note3 { display: block; margin-top: 4px; min-height: 1.2em; font-size: .78rem; color: var(--sign); }
+  .thumbs { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-content: start; padding-right: 2px; }
+  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; border: 3px solid transparent; }
+  .thumbs img:hover { border-color: var(--edge); }
+  .thumbs img.sel { border-color: var(--sign); }
+  /* the "+" box: drop here, click to browse, or Paste */
+  .addbox { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-bottom: 10px;
+    min-height: 62px; padding: 8px 10px; border: 2px dashed #4a505a; border-radius: 8px; background: rgba(250, 204, 21, .03);
+    cursor: pointer; transition: border-color .15s, background .15s; }
+  .addbox:hover, .addbox:focus-visible, .addbox.over { border-color: var(--sign); background: rgba(250, 204, 21, .09); outline: none; }
+  .addbox .plus { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--sign); color: var(--on-sign); }
+  .addbox .plus svg.i { width: 22px; height: 22px; stroke-width: 3; }
+  .addbox b { display: block; font: 800 1.05rem/1.15 var(--display); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  .addbox small { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+  .addbox .paste { min-height: 34px; padding: 3px 9px; font-size: .82rem; gap: 5px; }
+  #status { color: var(--muted); font-size: .8rem; display: flex; gap: 6px; align-items: center; }
+
+  /* report dialog */
+  dialog.report { width: min(980px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border: 2px solid var(--edge);
+    border-radius: 10px; background: var(--panel); color: var(--text); }
+  dialog.report::backdrop { background: rgba(8, 9, 11, .78); }
+  .dlg { padding: 14px; }
+  .dlghead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .dlghead .plate { margin: 0; }
+  .dlggrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 14px; }
+  .dlggrid .preview { background: #000; border: 2px solid var(--edge); border-radius: 6px; display: grid; place-items: center; min-height: 200px; }
+  .dlggrid .preview img { max-width: 100%; max-height: 62vh; display: block; }
+  .fl { display: flex; justify-content: space-between; gap: 8px; font: 700 .8rem var(--display); letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin: 10px 0 4px; }
+  .fl:first-child { margin-top: 0; }
+  .fl .src { color: var(--sign); letter-spacing: .04em; }
+  .dlg input[type=text], .dlg textarea { width: 100%; font: 15px/1.5 var(--body); color: var(--text); background: var(--panel-2);
+    border: 2px solid var(--edge); border-radius: 6px; padding: 8px 10px; }
+  .dlg textarea { resize: vertical; min-height: 150px; }
+  .dlg input:focus-visible, .dlg textarea:focus-visible { outline: 3px solid var(--sign); outline-offset: 1px; }
+  .locrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  button.primary { background: var(--sign); color: var(--on-sign); border-color: var(--sign); }
+  .note2 { color: var(--muted); font-size: .8rem; margin: 6px 0 0; }
+  .x { min-height: 36px; padding: 2px 10px; font-size: 1.2rem; }
+  @media (max-width: 760px) { .dlggrid { grid-template-columns: minmax(0, 1fr); } .dlggrid .preview img { max-height: 36vh; } }
+
+  /* drop overlay */
+  .drop { position: fixed; inset: 0; z-index: 20; background: rgba(20, 22, 25, .86); display: none; place-items: center; }
+  .drop.show { display: grid; }
+  .drop div { border: 4px dashed var(--sign); border-radius: 14px; padding: 36px 48px; text-align: center; font: 800 2rem var(--display);
+    text-transform: uppercase; letter-spacing: .04em; }
+  .drop small { display: block; font: 500 1rem var(--body); text-transform: none; letter-spacing: 0; color: var(--muted); margin-top: 6px; }
+
+  .about { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 2fr; gap: 8px; margin-top: 12px; align-items: stretch; }
+  .stat { background: var(--panel); border: 2px solid var(--edge); border-left: 5px solid var(--sign); border-radius: 6px; padding: 6px 10px; }
+  .stat b { display: block; font: 800 1.3rem/1.1 var(--display); }
+  .stat span { color: var(--muted); font-size: .78rem; }
+  .credit { color: var(--muted); font-size: .8rem; line-height: 1.5; align-self: center; }
+  a { color: var(--sign); }
+  .hidden { display: none !important; }
+  video { display: none; }
+
+  @media (max-width: 860px) {
+    :root { --viewer-h: min(62vh, 520px); }
+    .bench { grid-template-columns: minmax(0, 1fr); }
+    .side { height: auto; }
+    .legend { grid-template-columns: 1fr 1fr; }
+    .thumbs { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+    .thumbs img { width: 76px; flex: none; scroll-snap-align: start; }
+    .about { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .credit { grid-column: 1 / -1; }
+    .hint.desk { display: none; }
+    .samples { order: -1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="caution" aria-hidden="true"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</svg>
+
+<div class="drop" id="drop" aria-hidden="true"><div>Drop it<small>A road photo or video. It stays on this device.</small></div></div>
+
+<main>
+  <div class="top">
+    <div class="brand">
+      <svg class="diamond" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.2 22.8 12 12 22.8 1.2 12Z" fill="#facc15" stroke="#111" stroke-width="1.2"/>
+        <path d="M12 7v6M12 16.4v.4" stroke="#111" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <div><h1>Road <span>Hazard</span> Detection</h1><div class="tag">Potholes · cracks · Indian roads</div></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="tools">
+      <button id="tSample" class="on"><svg class="i"><use href="#i-img"/></svg>Samples</button>
+      <label class="btn"><svg class="i"><use href="#i-up"/></svg>Upload<input type="file" id="fAny" accept="image/*,video/*" aria-label="Upload a road photo or video"></label>
+      <button id="tCam"><svg class="i"><use href="#i-cam"/></svg>Camera</button>
+      <button id="save" class="save" disabled><svg class="i"><use href="#i-save"/></svg>Save</button>
+      <button id="report" class="save" disabled><svg class="i"><use href="#i-share"/></svg>Report</button>
+      <span class="hint desk"><svg class="i"><use href="#i-clip"/></svg>or <kbd>Ctrl</kbd>+<kbd>V</kbd> / drop anywhere · <kbd>←</kbd><kbd>→</kbd> samples</span>
+    </div>
+  </div>
+
+  <div class="bench">
+    <div class="viewer" id="viewer">
+      <canvas id="cv" width="640" height="640" aria-label="Detection result"></canvas>
+      <div class="empty" id="empty">Loading the model…</div>
+      <button class="nav prev" id="prev" aria-label="Previous sample"><svg class="i"><use href="#i-left"/></svg></button>
+      <button class="nav next" id="next" aria-label="Next sample"><svg class="i"><use href="#i-right"/></svg></button>
+      <span class="chip" id="timing"></span>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <span class="plate">Detected</span>
+        <div class="legend" id="legend"></div>
+        <div class="ctl">Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25" aria-label="Confidence threshold"><span id="confV">0.25</span></div>
+        <p class="none hidden" id="none">No hazards found. Rough village and rural roads are a known weak spot: the model learned from Indian road photos, mostly paved city roads.</p>
+        <div class="sharebox hidden" id="sharebox">
+          <span class="plate"><svg class="i"><use href="#i-share"/></svg>Report it</span>
+          <p class="capprev" id="capPrev"></p>
+          <div class="shareacts">
+            <button type="button" id="copyCap2" class="primary"><svg class="i"><use href="#i-copy"/></svg>Copy caption</button>
+            <button type="button" id="openRep"><svg class="i"><use href="#i-pin"/></svg>Place + tags</button>
+          </div>
+          <span class="note3" id="copyMsg" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="card samples">
+        <div class="addbox" id="addbox" role="button" tabindex="0" aria-label="Add a photo or video: drop it here, click to browse, or paste">
+          <span class="plus" aria-hidden="true"><svg class="i"><use href="#i-plus"/></svg></span>
+          <span><b>Drop or paste</b><small>photo or video · or click</small></span>
+          <button class="paste" id="pasteBtn" type="button"><svg class="i"><use href="#i-clip"/></svg>Paste</button>
+        </div>
+        <span class="plate">Sample roads</span>
+        <div id="thumbs" class="thumbs"></div>
+        <div id="status" style="margin-top:8px"><svg class="i"><use href="#i-cpu"/></svg><span>Loading model (10 MB, once)…</span></div>
+      </div>
+    </aside>
+  </div>
+  <video id="vid" playsinline muted></video>
+
+  <div class="about">
+    <div class="stat"><b>0.386</b><span>mAP@0.5, 775 test images</span></div>
+    <div class="stat"><b>0.43</b><span>pothole AP@0.5</span></div>
+    <div class="stat"><b>+44%</b><span>from one training fix</span></div>
+    <div class="stat"><b>10 MB</b><span>model, runs offline</span></div>
+    <div class="credit">Samples are held-out test images from <a href="https://doi.org/10.6084/m9.figshare.21431547">RDD2022</a>
+      (Arya et al., CC BY 4.0), India subset. Photos and frames never leave your device.
+      Code and results: <a href="https://github.com/VivekVagale/road-hazard">github.com/VivekVagale/road-hazard</a> · by Vivek Vagale</div>
+  </div>
+</main>
+
+<dialog class="report" id="dlg" aria-labelledby="dlgTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><span class="plate" id="dlgTitle"><svg class="i"><use href="#i-share"/></svg>Report this hazard</span>
+      <button value="close" class="x" aria-label="Close">×</button></div>
+    <div class="dlggrid">
+      <div class="preview"><img id="rpImg" alt="The photo that will be shared"></div>
+      <div>
+        <label class="fl" for="loc">Location <span class="src" id="locSrc"></span></label>
+        <div class="locrow"><input type="text" id="loc" placeholder="Road, area, city" autocomplete="off">
+          <button type="button" id="gps"><svg class="i"><use href="#i-pin"/></svg>My location</button></div>
+        <label class="fl" for="tags">Tag the authorities <span class="src" id="tagSrc"></span></label>
+        <input type="text" id="tags" placeholder="@civicbody @trafficpolice" autocomplete="off">
+        <p class="note2" id="tagNote"></p>
+        <label class="fl" for="cap">Caption <span class="src" id="cnt"></span></label>
+        <textarea id="cap"></textarea>
+        <div class="acts">
+          <button type="button" id="share" class="primary"><svg class="i"><use href="#i-share"/></svg>Share photo + caption</button>
+          <button type="button" id="copyCap"><svg class="i"><use href="#i-copy"/></svg>Copy caption</button>
+          <button type="button" id="dlBtn"><svg class="i"><use href="#i-save"/></svg>Save photo</button>
+          <button type="button" id="openX">Post on X</button>
+        </div>
+        <p class="note2" id="shareMsg"></p>
+        <p class="note2">Check the tags before posting, and skip photos where faces or number plates can be read.
+          Looking up a place name sends the coordinates to OpenStreetMap.</p>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+const NAMES = ["longitudinal crack", "transverse crack", "alligator crack", "pothole"];
+const COLORS = () => [0, 1, 2, 3].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--c${i}`).trim());
+const SIZE = 640, N_SAMPLES = 12;
+const $ = (id) => document.getElementById(id);
+const setStatus = (text) => ($("status").lastElementChild.textContent = text);
+const cv = $("cv"), ctx = cv.getContext("2d");
+let session, conf = 0.25, current = null, camStream = null, looping = false, sampleIdx = 0, source = "sample", lastDets = null, scanToken = 0;
+// where and when the current photo was taken: from the photo's GPS data, the device, or typed in
+let meta = { lat: null, lon: null, when: null, how: null, place: "", city: "" };
+
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+
+// Resize with padding to 640x640, keeping the aspect ratio ("letterbox"), as in training.
+function letterbox(src, w, h) {
+  const scale = Math.min(SIZE / w, SIZE / h);
+  const nw = Math.round(w * scale), nh = Math.round(h * scale);
+  const px = Math.floor((SIZE - nw) / 2), py = Math.floor((SIZE - nh) / 2);
+  const c = new OffscreenCanvas(SIZE, SIZE), g = c.getContext("2d");
+  g.fillStyle = "rgb(114,114,114)"; g.fillRect(0, 0, SIZE, SIZE);
+  g.drawImage(src, px, py, nw, nh);
+  const { data } = g.getImageData(0, 0, SIZE, SIZE);
+  const t = new Float32Array(3 * SIZE * SIZE), A = SIZE * SIZE;
+  for (let i = 0; i < A; i++) { t[i] = data[4 * i] / 255; t[A + i] = data[4 * i + 1] / 255; t[2 * A + i] = data[4 * i + 2] / 255; }
+  return { tensor: new ort.Tensor("float32", t, [1, 3, SIZE, SIZE]), scale, px, py };
+}
+
+function iou(a, b) {
+  const x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]), x2 = Math.min(a[2], b[2]), y2 = Math.min(a[3], b[3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter);
+}
+
+// Output is [1, 4 + classes, 8400]: box centre/size then one score per class, for 8400 candidate boxes.
+function decode(out, lb, w, h) {
+  const [, rows, n] = out.dims, d = out.data, boxes = [];
+  for (let i = 0; i < n; i++) {
+    let best = 0, cls = -1;
+    for (let c = 4; c < rows; c++) if (d[c * n + i] > best) { best = d[c * n + i]; cls = c - 4; }
+    if (best < conf) continue;
+    const cx = d[i], cy = d[n + i], bw = d[2 * n + i], bh = d[3 * n + i];
+    const x1 = (cx - bw / 2 - lb.px) / lb.scale, y1 = (cy - bh / 2 - lb.py) / lb.scale;
+    const x2 = (cx + bw / 2 - lb.px) / lb.scale, y2 = (cy + bh / 2 - lb.py) / lb.scale;
+    boxes.push({ box: [Math.max(0, x1), Math.max(0, y1), Math.min(w, x2), Math.min(h, y2)], score: best, cls });
+  }
+  // non-maximum suppression per class: keep the best box, drop overlapping duplicates
+  boxes.sort((a, b) => b.score - a.score);
+  const keep = [];
+  for (const b of boxes) if (!keep.some((k) => k.cls === b.cls && iou(k.box, b.box) > 0.45)) keep.push(b);
+  return keep;
+}
+
+function drawFrame(src, w, h) {
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  ctx.drawImage(src, 0, 0, w, h);
+}
+
+// one box; p < 1 animates a "lock-on": brackets close in from 40% larger, then the label appears
+function drawBox(d, w, p = 1) {
+  const col = COLORS()[d.cls], lw = Math.max(2, Math.round(w / 280)), fs = Math.max(13, Math.round(w / 40));
+  const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 3);
+  let [x1, y1, x2, y2] = d.box;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, k = 1 + 0.4 * (1 - e);
+  x1 = cx + (x1 - cx) * k; x2 = cx + (x2 - cx) * k; y1 = cy + (y1 - cy) * k; y2 = cy + (y2 - cy) * k;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, e * 1.6);
+  ctx.strokeStyle = col; ctx.lineWidth = lw;
+  if (e < 1) {                                   // corner brackets only while locking on
+    const L = Math.min(x2 - x1, y2 - y1) * 0.28;
+    ctx.beginPath();
+    for (const [x, y, sx, sy] of [[x1, y1, 1, 1], [x2, y1, -1, 1], [x1, y2, 1, -1], [x2, y2, -1, -1]]) {
+      ctx.moveTo(x + sx * L, y); ctx.lineTo(x, y); ctx.lineTo(x, y + sy * L);
+    }
+    ctx.lineWidth = lw * 1.6; ctx.stroke();
+  } else {
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  }
+  if (e > 0.7) {
+    ctx.globalAlpha = (e - 0.7) / 0.3;
+    ctx.font = `700 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    const label = `${NAMES[d.cls].toUpperCase()} ${Math.round(d.score * 100)}%`, tw = ctx.measureText(label).width + 10;
+    const ty = y1 > fs + 6 ? y1 - fs - 6 : y1;
+    ctx.fillStyle = col; ctx.fillRect(x1, ty, tw, fs + 6);
+    ctx.fillStyle = "#000"; ctx.fillText(label, x1 + 5, ty + fs);
+  }
+  ctx.restore();
+}
+
+function showCounts(dets) {
+  const col = COLORS(), counts = [0, 0, 0, 0];
+  dets.forEach((d) => counts[d.cls]++);
+  $("legend").innerHTML = NAMES.map((n, i) =>
+    `<div><span class="sw" style="background:${col[i]}"></span>${n}<span class="count">${counts[i]}</span></div>`).join("");
+}
+
+function draw(src, w, h, dets) {
+  drawFrame(src, w, h);
+  dets.forEach((d) => drawBox(d, w));
+  showCounts(dets);
+}
+
+// the scanning sweep: a sign-yellow line moves down, the scanned part gets a grid, a HUD shows progress
+function drawScan(src, w, h, p) {
+  drawFrame(src, w, h);
+  const y = p * h, g = Math.max(24, Math.round(w / 18)), fs = Math.max(13, Math.round(w / 38));
+  ctx.save();
+  ctx.fillStyle = "rgba(8, 10, 14, .28)"; ctx.fillRect(0, y, w, h - y);           // not yet scanned: dimmed
+  ctx.fillStyle = "rgba(250, 204, 21, .06)"; ctx.fillRect(0, 0, w, y);            // scanned: faint tint + grid
+  ctx.strokeStyle = "rgba(250, 204, 21, .16)"; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 0; x <= w; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, y); }
+  for (let yy = 0; yy <= y; yy += g) { ctx.moveTo(0, yy); ctx.lineTo(w, yy); }
+  ctx.stroke();
+  const glow = ctx.createLinearGradient(0, y - h * 0.12, 0, y);
+  glow.addColorStop(0, "rgba(250, 204, 21, 0)"); glow.addColorStop(1, "rgba(250, 204, 21, .35)");
+  ctx.fillStyle = glow; ctx.fillRect(0, y - h * 0.12, w, h * 0.12);
+  ctx.fillStyle = "#facc15"; ctx.fillRect(0, y - 2, w, Math.max(3, h / 240));
+  ctx.font = `700 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const label = `SCANNING FOR HAZARDS  ${Math.round(p * 100)}%`, tw = ctx.measureText(label).width + 16;
+  ctx.fillStyle = "rgba(17, 17, 17, .78)"; ctx.fillRect(10, 10, tw, fs + 12);
+  ctx.fillStyle = "#facc15"; ctx.fillText(label, 18, 10 + fs + 3);
+  ctx.restore();
+}
+
+// runs fn(t) every frame for `ms`, t going 0 -> 1; stops early if a newer scan started
+function animate(ms, token, fn) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const step = () => {
+      if (token !== scanToken) return resolve(false);
+      const t = Math.min(1, (performance.now() - t0) / ms);
+      fn(t);
+      if (t < 1) requestAnimationFrame(step); else resolve(true);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+// a still photo: run the model while the scan plays, then lock onto each hazard one by one
+async function detectStill(src, w, h) {
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches || document.visibilityState !== "visible";
+  if (calm) return detect(src, w, h);
+  const token = ++scanToken, t0 = performance.now();
+  const lb = letterbox(src, w, h);
+  const result = session.run({ images: lb.tensor }).then((r) => ({ dets: decode(r.output0, lb, w, h), ms: performance.now() - t0 }));
+  $("empty").classList.add("hidden");
+  $("timing").innerHTML = "<b>Scanning…</b>";
+  if (!(await animate(850, token, (t) => drawScan(src, w, h, t)))) return;
+  const { dets, ms } = await result;
+  if (token !== scanToken) return;
+  const STEP = 160, POP = 320;
+  await animate(dets.length * STEP + POP, token, (t) => {
+    const now = t * (dets.length * STEP + POP);
+    drawFrame(src, w, h);
+    const shown = dets.filter((d, i) => now >= i * STEP);
+    shown.forEach((d, i) => drawBox(d, w, (now - i * STEP) / POP));
+    showCounts(shown);
+  });
+  if (token !== scanToken) return;
+  draw(src, w, h, dets);
+  finish(dets, ms);
+}
+
+// sidebar: the caption ready to copy as soon as something is found, or an honest note when nothing is
+let shownWhat;
+async function updateShareCard(dets) {
+  const what = describe(dets);
+  $("none").classList.toggle("hidden", !!what);
+  $("sharebox").classList.toggle("hidden", !what);
+  if (what === shownWhat) return;                  // the camera calls this every frame: rebuild only on change
+  shownWhat = what;
+  if (what) $("capPrev").textContent = await buildCaption();
+  $("copyMsg").textContent = "";
+}
+
+function finish(dets, ms) {
+  lastDets = dets; $("save").disabled = false; $("report").disabled = false;
+  updateShareCard(dets);
+  $("empty").classList.add("hidden");
+  const label = source === "sample" ? `Sample ${sampleIdx + 1} of ${N_SAMPLES}` : source === "camera" ? "Live camera" : source;
+  $("timing").innerHTML = `<b>${label}</b> · ${dets.length} found · model ${Math.round(ms)} ms`;
+}
+
+async function detect(src, w, h) {
+  const t0 = performance.now();
+  const lb = letterbox(src, w, h);
+  const out = (await session.run({ images: lb.tensor })).output0;
+  const dets = decode(out, lb, w, h);
+  draw(src, w, h, dets);
+  finish(dets, performance.now() - t0);
+  return dets;
+}
+
+// onload instead of img.decode(): decode() never settles while the tab is in the background
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("could not load that image"));
+    img.src = url;
+  });
+}
+
+async function showImage(url) {
+  stopLoops();
+  const img = await loadImage(url);
+  current = img;
+  await detectStill(img, img.naturalWidth, img.naturalHeight);
+}
+
+// ---------- save: the marked-up photo with a white dock underneath ----------
+function stripe(g, x, y, w, h) {
+  g.save();
+  g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = "#111"; g.fillRect(x, y, w, h);
+  g.fillStyle = "#facc15";
+  for (let s = x - h; s < x + w + h; s += h * 2) {
+    g.beginPath(); g.moveTo(s, y + h); g.lineTo(s + h, y); g.lineTo(s + 2 * h, y); g.lineTo(s + h, y + h); g.fill();
+  }
+  g.restore();
+}
+
+function diamond(g, cx, cy, r) {
+  g.save();
+  g.beginPath(); g.moveTo(cx, cy - r); g.lineTo(cx + r, cy); g.lineTo(cx, cy + r); g.lineTo(cx - r, cy); g.closePath();
+  g.fillStyle = "#facc15"; g.fill(); g.lineWidth = Math.max(1.5, r * 0.07); g.strokeStyle = "#111"; g.stroke();
+  g.lineCap = "round"; g.lineWidth = r * 0.18;
+  g.beginPath(); g.moveTo(cx, cy - r * 0.45); g.lineTo(cx, cy + r * 0.12); g.stroke();
+  g.beginPath(); g.moveTo(cx, cy + r * 0.42); g.lineTo(cx, cy + r * 0.44); g.stroke();
+  g.restore();
+}
+
+function composite(locLine = "") {
+  const w = cv.width, h = cv.height;
+  const u = Math.max(w, 640) / 100;              // layout unit: 1% of the width (at least 6.4 px)
+  const pad = 3 * u, stripeH = Math.round(1.6 * u);
+  const titlePx = Math.round(4.6 * u), tagPx = Math.round(2.1 * u), countPx = Math.round(2.3 * u), locPx = Math.round(2.2 * u);
+  const col = ["#0284c7", "#9333ea", "#16a34a", "#dc2626"]; // the class colours, darkened to read on white
+  const counts = [0, 0, 0, 0]; (lastDets || []).forEach((d) => counts[d.cls]++);
+  const found = counts.map((n, i) => [n, i]).filter(([n]) => n > 0);
+
+  const out = document.createElement("canvas"), g = out.getContext("2d");
+  const F = (wt, px) => `${wt} ${px}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  // measure first, to know whether the counts fit beside the title or need their own line
+  g.font = F(800, titlePx);
+  const titleW = g.measureText("ROAD HAZARD DETECTION").width + titlePx * 0.4;
+  g.font = F(700, countPx);
+  const items = found.length ? found.map(([n, i]) => `${n} ${NAMES[i]}${n > 1 ? "s" : ""}`.toUpperCase()) : ["NO DAMAGE FOUND"];
+  // each item is: swatch (1 countPx) + text + gap (0.9 countPx); no swatches or trailing gap when nothing was found
+  const countsW = found.length
+    ? items.reduce((a, t) => a + countPx + g.measureText(t).width + countPx * 0.9, 0) - countPx * 0.9
+    : g.measureText(items[0]).width;
+  const logoW = titlePx * 2.2, tx = pad + logoW;
+  const sideBySide = tx + titleW + 2 * pad + countsW <= w;
+
+  // stack the text lines: title, tagline, (location), (counts when they do not fit beside the title)
+  const lines = [titlePx, tagPx * 1.55];
+  if (locLine) lines.push(locPx * 1.6);
+  if (!sideBySide) lines.push(countPx * 1.9);
+  const textH = lines.reduce((a, b) => a + b, 0);
+  const dockH = Math.round(textH + 2 * pad);
+
+  out.width = w; out.height = h + stripeH + dockH;
+  g.drawImage(cv, 0, 0);
+  stripe(g, 0, h, w, stripeH);
+  g.fillStyle = "#ffffff"; g.fillRect(0, h + stripeH, w, dockH);
+
+  const top = h + stripeH;
+  let base = top + pad + titlePx * 0.85;          // title baseline
+  diamond(g, pad + titlePx * 0.8, top + pad + titlePx * 0.55, titlePx * 0.8);
+  g.textBaseline = "alphabetic";
+  g.font = F(800, titlePx);
+  let x = tx;
+  g.fillStyle = "#111"; g.fillText("ROAD ", x, base); x += g.measureText("ROAD ").width;
+  const hz = g.measureText("HAZARD").width;
+  g.fillStyle = "#facc15"; g.fillRect(x - titlePx * 0.08, base - titlePx * 0.8, hz + titlePx * 0.16, titlePx * 0.92);
+  g.fillStyle = "#111"; g.fillText("HAZARD", x, base); x += hz;
+  g.fillText(" DETECTION", x, base);
+  const titleBase = base;
+
+  base += tagPx * 1.55;
+  g.font = F(600, tagPx); g.fillStyle = "#555b66";
+  if ("letterSpacing" in g) g.letterSpacing = `${tagPx * 0.14}px`;
+  g.fillText("POTHOLES · CRACKS · INDIAN ROADS", tx, base);
+  if ("letterSpacing" in g) g.letterSpacing = "0px";
+
+  if (locLine) {                                  // map pin + "Road, Area, City · date"
+    base += locPx * 1.6;
+    const r = locPx * 0.36, px = tx + r, py = base - locPx * 0.42;
+    g.fillStyle = "#dc2626";
+    g.beginPath(); g.arc(px, py - r * 0.3, r, Math.PI, 0); g.lineTo(px, py + r * 1.3); g.closePath(); g.fill();
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(px, py - r * 0.3, r * 0.4, 0, 2 * Math.PI); g.fill();
+    g.font = F(700, locPx); g.fillStyle = "#111";
+    let text = locLine;
+    while (g.measureText(text).width > w - tx - pad - r * 3 && text.length > 8) text = text.slice(0, -2);
+    if (text !== locLine) text = text.trimEnd() + "…";
+    g.fillText(text, tx + r * 2.8, base);
+  }
+
+  // counts: right-aligned beside the title, or on their own line underneath
+  g.font = F(700, countPx);
+  let cx = sideBySide ? w - pad - countsW : tx;
+  const cyCounts = sideBySide ? titleBase - titlePx * 0.12 : base + countPx * 1.7;
+  items.forEach((t, k) => {
+    if (found.length) {
+      g.fillStyle = col[found[k][1]];
+      g.fillRect(cx, cyCounts - countPx * 0.72, countPx * 0.72, countPx * 0.72);
+    }
+    const off = found.length ? countPx : 0;
+    g.fillStyle = "#111"; g.fillText(t, cx + off, cyCounts);
+    cx += off + g.measureText(t).width + countPx * 0.9;
+  });
+  return out;
+}
+
+async function save() {
+  if (!lastDets) return;
+  await document.fonts.ready;                    // draw the dock with the real signage font
+  const name = (source === "sample" ? `sample-${sampleIdx + 1}` : source === "camera" ? "camera" : source)
+    .replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9-]+/gi, "-").toLowerCase();
+  composite(locLine()).toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `road-hazard-${name}.png`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, "image/png");
+}
+$("save").onclick = save;
+
+function stopLoops() {
+  looping = false;
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+  $("vid").pause();
+  $("tCam").classList.remove("on");
+}
+
+async function loop() {
+  const v = $("vid");
+  looping = true; current = v;
+  while (looping && !v.ended) {
+    if (v.readyState >= 2) await detect(v, v.videoWidth, v.videoHeight);
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+}
+
+function setMode(mode) {
+  source = mode;
+  $("tSample").classList.toggle("on", mode === "sample");
+  $("prev").classList.toggle("hidden", mode !== "sample");
+  $("next").classList.toggle("hidden", mode !== "sample");
+  if (mode !== "sample") document.querySelectorAll(".thumbs img").forEach((x) => x.classList.remove("sel"));
+}
+
+// ---------- samples: click, arrows, or ← → keys ----------
+function pickSample(i) {
+  sampleIdx = (i + N_SAMPLES) % N_SAMPLES;
+  resetMeta();
+  setMode("sample");
+  const imgs = document.querySelectorAll(".thumbs img");
+  imgs.forEach((x, k) => x.classList.toggle("sel", k === sampleIdx));
+  imgs[sampleIdx].scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (session) showImage(imgs[sampleIdx].src);
+}
+for (let i = 0; i < N_SAMPLES; i++) {
+  const t = document.createElement("img");
+  t.src = `samples/${String(i + 1).padStart(2, "0")}.jpg`; t.alt = `Sample road ${i + 1}`; t.tabIndex = 0;
+  t.onclick = () => pickSample(i);
+  t.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickSample(i); } };
+  $("thumbs").append(t);
+}
+$("prev").onclick = () => pickSample(sampleIdx - 1);
+$("next").onclick = () => pickSample(sampleIdx + 1);
+$("tSample").onclick = () => pickSample(sampleIdx);
+document.addEventListener("keydown", (e) => {
+  if ((e.target instanceof Element && e.target.matches("input, select, textarea")) || source !== "sample") return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); pickSample(sampleIdx - 1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); pickSample(sampleIdx + 1); }
+});
+
+// ---------- one entry point for every file: upload, paste or drop ----------
+async function handleFile(file) {
+  if (!file) return;
+  if (!session) { setStatus("The model is still loading, try again in a second."); return; }
+  if (file.type.startsWith("image/")) {
+    setMode(file.name ? file.name : "Pasted image");
+    readPhotoMeta(file);
+    await showImage(URL.createObjectURL(file));
+  } else if (file.type.startsWith("video/")) {
+    resetMeta(); stopLoops(); setMode(file.name || "Video");
+    const v = $("vid"); v.srcObject = null; v.src = URL.createObjectURL(file); v.loop = false; await v.play(); loop();
+  } else {
+    setStatus(`That is a ${file.type || "file"} — drop a photo or a video.`);
+  }
+}
+$("fAny").onchange = (e) => { handleFile(e.target.files[0]); e.target.value = ""; };
+
+// paste: an image or video from the clipboard, or a link to an image
+document.addEventListener("paste", async (e) => {
+  const item = [...(e.clipboardData?.items ?? [])].find((it) => it.kind === "file");
+  if (item) { e.preventDefault(); return handleFile(item.getAsFile()); }
+  const text = e.clipboardData?.getData("text")?.trim();
+  if (text && /^https?:\/\/\S+$/i.test(text)) {
+    e.preventDefault();
+    try { stopLoops(); setMode("Pasted link"); await showImage(text); }
+    catch { setStatus("That site does not allow its images to be read by other pages. Save the image, then paste or drop it."); }
+  }
+});
+
+// drag and drop anywhere on the page
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+window.addEventListener("dragenter", (e) => { if (hasFiles(e)) { dragDepth++; $("drop").classList.add("show"); } });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop").classList.remove("show"); } });
+window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; $("drop").classList.remove("show");
+  handleFile(e.dataTransfer.files[0]);
+});
+
+// the "+" box: click or Enter to browse, glows while a file is dragged over it
+const addbox = $("addbox");
+addbox.onclick = (e) => { if (!e.target.closest("#pasteBtn")) $("fAny").click(); };
+addbox.onkeydown = (e) => { if (e.target === addbox && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); $("fAny").click(); } };
+addbox.addEventListener("dragover", () => addbox.classList.add("over"));
+addbox.addEventListener("dragleave", () => addbox.classList.remove("over"));
+window.addEventListener("drop", () => addbox.classList.remove("over"));
+
+// Paste button: reads the clipboard directly (needed on phones, where there is no Ctrl+V);
+// the browser asks for permission the first time
+$("pasteBtn").onclick = async () => {
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find((t) => t.startsWith("image/") || t.startsWith("video/"));
+      if (type) return handleFile(new File([await item.getType(type)], "Pasted image", { type }));
+    }
+    const text = (await navigator.clipboard.readText()).trim();
+    if (/^https?:\/\/\S+$/i.test(text)) { stopLoops(); setMode("Pasted link"); return await showImage(text); }
+    setStatus("Nothing to paste: copy a photo first.");
+  } catch {
+    setStatus("This browser blocked the Paste button. Press Ctrl+V anywhere on the page instead.");
+  }
+};
+
+// ---------- location, authorities and captions for public reports ----------
+const EXIFR = "https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.esm.mjs";
+let AUTH = null;
+const authorities = async () => (AUTH ??= await (await fetch("authorities.json")).json());
+
+function resetMeta() {
+  meta = { lat: null, lon: null, when: null, how: null, place: "", city: "" };
+  $("loc").value = ""; $("tags").value = ""; capEdited = false; shownWhat = undefined;   // a new photo starts a new report
+}
+
+// GPS and capture time from the photo's EXIF data (phones and most dashcams write it; screenshots do not)
+async function readPhotoMeta(file) {
+  resetMeta();
+  try {
+    const exifr = (await import(EXIFR)).default;
+    const t = await exifr.parse(file);           // one read gives latitude/longitude (already decimal) and the capture time
+    if (t?.latitude) Object.assign(meta, { lat: t.latitude, lon: t.longitude, how: "from the photo's GPS" });
+    if (t?.DateTimeOriginal) meta.when = new Date(t.DateTimeOriginal);
+  } catch { /* no EXIF reader or no data: the user can still type the place */ }
+}
+
+// coordinates -> "Road, Area, City" with OpenStreetMap's Nominatim (only when the report panel is opened)
+async function placeName(lat, lon) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=17&accept-language=en&lat=${lat}&lon=${lon}`;
+  const a = (await (await fetch(url)).json()).address || {};
+  const city = a.city || a.town || a.village || a.county || a.state_district || "";
+  const area = a.suburb || a.neighbourhood || a.quarter || a.city_district || "";
+  meta.city = city;
+  return [a.road, area, city].filter((x, i, arr) => x && arr.indexOf(x) === i).join(", ");
+}
+
+async function tagsFor(place, city) {
+  const A = await authorities(), text = `${place} ${city}`.toLowerCase();
+  const hit = A.cities.find((c) => c.match.some((m) => text.includes(m)));
+  const tags = hit ? [...hit.civic, ...hit.traffic] : [];
+  if (/\bnh[- ]?\d+|national highway/i.test(place)) tags.push(...A.national_highways);
+  meta.city = hit?.name || city;
+  return { tags, known: !!hit };
+}
+
+const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
+function describe(dets) {
+  const counts = [0, 0, 0, 0]; dets.forEach((d) => counts[d.cls]++);
+  const parts = counts.map((n, i) => (n ? plural(n, NAMES[i]) : null)).filter(Boolean);
+  if (!parts.length) return null;
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+}
+const fmtDate = (d) => d?.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+function locLine() {
+  const place = ($("loc")?.value || meta.place || "").trim();
+  const when = fmtDate(meta.when || (source === "camera" ? new Date() : null));
+  return [place, when].filter(Boolean).join(" · ");
+}
+
+async function buildCaption() {
+  const A = await authorities();
+  const what = describe(lastDets || []);
+  const place = $("loc").value.trim(), when = fmtDate(meta.when);
+  const cityTag = meta.city ? `#${meta.city.replace(/[^A-Za-z]/g, "")}Roads` : "";
+  const lines = [
+    what ? `🚧 ${what[0].toUpperCase() + what.slice(1)} spotted${place ? ` at ${place}` : ""}${when ? ` (${when})` : ""}.`
+         : `Road check${place ? ` at ${place}` : ""}${when ? ` (${when})` : ""}: no damage detected.`,
+    what ? "Please fix this before someone gets hurt." : "",
+    $("tags").value.trim(),
+    [...A.hashtags, cityTag].filter(Boolean).join(" "),
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+let capEdited = false;
+async function refreshCaption() {
+  if (!capEdited) $("cap").value = await buildCaption();
+  const n = [...$("cap").value].length;               // X counts characters, not bytes
+  $("cnt").textContent = `${n} / 280 for X`;
+  $("cnt").style.color = n > 280 ? "var(--c3)" : "";
+}
+
+async function fillLocation(lat, lon, how) {
+  $("locSrc").textContent = "Looking up the place…";
+  try {
+    const place = await placeName(lat, lon);
+    meta.place = place; $("loc").value = place;
+    $("locSrc").textContent = how;
+  } catch { $("locSrc").textContent = "Could not look up the place: type it in"; }
+  await refreshTags();
+}
+
+async function refreshTags() {
+  const { tags, known } = await tagsFor($("loc").value, meta.city);
+  $("tags").value = tags.join(" ");
+  $("tagSrc").textContent = known ? `${meta.city}: check before posting` : "";
+  $("tagNote").textContent = known ? "" : "No handles saved for this place yet: add the local municipal corporation and traffic police.";
+  await refreshCaption();
+}
+
+async function openReport() {
+  if (!lastDets) return;
+  await document.fonts.ready;
+  capEdited = false; $("shareMsg").textContent = "";
+  $("loc").value = meta.place;
+  $("locSrc").textContent = meta.how || (meta.lat ? "" : "No GPS in this photo: type the place or use your location");
+  $("rpImg").src = composite(locLine()).toDataURL("image/jpeg", 0.9);
+  $("dlg").showModal();
+  // edits made in the report panel show up in the sidebar caption too
+  $("dlg").addEventListener("close", async () => { if (describe(lastDets || [])) $("capPrev").textContent = capEdited ? $("cap").value : await buildCaption(); }, { once: true });
+  if (meta.lat && !meta.place) await fillLocation(meta.lat, meta.lon, meta.how);
+  else await refreshTags();
+  $("rpImg").src = composite(locLine()).toDataURL("image/jpeg", 0.9);
+}
+$("report").onclick = openReport;
+
+$("gps").onclick = () => {
+  if (!navigator.geolocation) { $("locSrc").textContent = "This browser cannot share its location"; return; }
+  $("locSrc").textContent = "Asking for your location…";
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      Object.assign(meta, { lat: pos.coords.latitude, lon: pos.coords.longitude, how: "from your device's location" });
+      if (!meta.when) meta.when = new Date();
+      await fillLocation(meta.lat, meta.lon, meta.how);
+      $("rpImg").src = composite(locLine()).toDataURL("image/jpeg", 0.9);
+    },
+    (err) => { $("locSrc").textContent = `Location not available (${err.message})`; },
+    { enableHighAccuracy: true, timeout: 10000 });
+};
+let locTimer;
+$("loc").oninput = () => {
+  meta.place = $("loc").value;
+  clearTimeout(locTimer);
+  locTimer = setTimeout(async () => { await refreshTags(); $("rpImg").src = composite(locLine()).toDataURL("image/jpeg", 0.9); }, 400);
+};
+$("tags").oninput = () => refreshCaption();
+$("cap").oninput = () => { capEdited = true; refreshCaption(); };
+
+const reportBlob = () => new Promise((r) => composite(locLine()).toBlob(r, "image/png"));
+const fileName = () => `road-hazard-${(meta.city || "report").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+async function downloadReport() {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(await reportBlob()); a.download = fileName(); a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$("dlBtn").onclick = downloadReport;
+$("copyCap").onclick = async () => {
+  try { await navigator.clipboard.writeText($("cap").value); $("shareMsg").textContent = "Caption copied."; }
+  catch { $("cap").select(); $("shareMsg").textContent = "Press Ctrl+C to copy the selected caption."; }
+};
+$("copyCap2").onclick = async () => {
+  const text = capEdited ? $("cap").value : await buildCaption();
+  $("capPrev").textContent = text;
+  try { await navigator.clipboard.writeText(text); $("copyMsg").textContent = "Caption copied. Paste it with your photo."; }
+  catch {
+    const r = document.createRange(); r.selectNodeContents($("capPrev"));
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    $("copyMsg").textContent = "Press Ctrl+C to copy the selected caption.";
+  }
+};
+$("openRep").onclick = openReport;
+// phones: the share sheet sends photo + caption straight to X, Instagram or WhatsApp
+$("share").onclick = async () => {
+  const file = new File([await reportBlob()], fileName(), { type: "image/png" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: $("cap").value }); return; }
+    catch (e) { if (e.name === "AbortError") return; }
+  }
+  await downloadReport();
+  try { await navigator.clipboard.writeText($("cap").value); } catch { /* ignore */ }
+  $("shareMsg").textContent = "Photo saved and caption copied. Open X or Instagram, paste the caption and attach the photo.";
+};
+// desktop: X's post page with the caption filled in (X does not let other sites attach the photo)
+$("openX").onclick = async () => {
+  await downloadReport();
+  $("shareMsg").textContent = "Photo saved: attach it to the post that just opened.";
+  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent($("cap").value)}`, "_blank", "noopener");
+};
+
+$("tCam").onclick = async () => {
+  if (camStream) { stopLoops(); return pickSample(sampleIdx); }
+  stopLoops(); resetMeta();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+  } catch (err) { setStatus("Camera not available: " + err.message); return; }
+  setMode("camera");
+  const v = $("vid"); v.src = ""; v.srcObject = camStream; await v.play();
+  $("tCam").classList.add("on"); loop();
+};
+$("conf").oninput = (e) => {
+  conf = +e.target.value; $("confV").textContent = conf.toFixed(2);
+  if (current instanceof HTMLImageElement) detect(current, current.naturalWidth, current.naturalHeight);
+};
+
+(async () => {
+  try {
+    session = await ort.InferenceSession.create("models/yolo11n.onnx", { executionProviders: ["wasm"] });
+    setStatus("Model ready.");
+    pickSample(0);
+  } catch (e) {
+    setStatus("Could not load the model: " + e.message);
+    $("empty").textContent = "Could not load the model.";
+  }
+})();
+</script>
+</body>
+</html>
