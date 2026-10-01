@@ -62,7 +62,7 @@
   .chip b { color: var(--sign); font-weight: 600; }
   .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 20px; }
 
-  .side { height: var(--viewer-h); display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .side { height: var(--viewer-h); display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
   .card { background: var(--panel); border: 2px solid var(--edge); border-radius: 8px; padding: 10px; }
   .plate { display: inline-flex; align-items: center; gap: 6px; font: 700 .76rem var(--display); letter-spacing: .12em; text-transform: uppercase;
     background: var(--sign); color: var(--on-sign); padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
@@ -74,7 +74,14 @@
   .ctl { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 700 .82rem var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   input[type=range] { flex: 1; accent-color: var(--sign); min-width: 0; }
   #confV { color: var(--sign); font-size: 1rem; min-width: 34px; text-align: right; }
-  .samples { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .samples { flex: 1 0 210px; min-height: 210px; display: flex; flex-direction: column; }
+  .none { margin: 8px 0 0; padding: 6px 8px; border-left: 3px solid var(--sign); background: var(--panel-2); border-radius: 4px; color: var(--muted); font-size: .85rem; line-height: 1.45; }
+  .sharebox { margin-top: 8px; padding-top: 8px; border-top: 2px dashed var(--edge); }
+  .capprev { margin: 0 0 8px; white-space: pre-line; font-size: .85rem; line-height: 1.45; color: var(--text); background: var(--panel-2); border-radius: 5px; padding: 6px 8px;
+    max-height: 4.5em; overflow-y: auto; overflow-wrap: anywhere; }
+  .shareacts { display: flex; gap: 6px; }
+  .shareacts button { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+  .note3 { display: block; margin-top: 4px; min-height: 1.2em; font-size: .78rem; color: var(--sign); }
   .thumbs { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-content: start; padding-right: 2px; }
   .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; border: 3px solid transparent; }
   .thumbs img:hover { border-color: var(--edge); }
@@ -198,6 +205,16 @@
         <span class="plate">Detected</span>
         <div class="legend" id="legend"></div>
         <div class="ctl">Confidence <input type="range" id="conf" min="0.05" max="0.9" step="0.05" value="0.25" aria-label="Confidence threshold"><span id="confV">0.25</span></div>
+        <p class="none hidden" id="none">No hazards found. Rough village and rural roads are a known weak spot: the model learned from Indian road photos, mostly paved city roads.</p>
+        <div class="sharebox hidden" id="sharebox">
+          <span class="plate"><svg class="i"><use href="#i-share"/></svg>Report it</span>
+          <p class="capprev" id="capPrev"></p>
+          <div class="shareacts">
+            <button type="button" id="copyCap2" class="primary"><svg class="i"><use href="#i-copy"/></svg>Copy caption</button>
+            <button type="button" id="openRep"><svg class="i"><use href="#i-pin"/></svg>Place + tags</button>
+          </div>
+          <span class="note3" id="copyMsg" aria-live="polite"></span>
+        </div>
       </div>
       <div class="card samples">
         <div class="addbox" id="addbox" role="button" tabindex="0" aria-label="Add a photo or video: drop it here, click to browse, or paste">
@@ -416,8 +433,21 @@ async function detectStill(src, w, h) {
   finish(dets, ms);
 }
 
+// sidebar: the caption ready to copy as soon as something is found, or an honest note when nothing is
+let shownWhat;
+async function updateShareCard(dets) {
+  const what = describe(dets);
+  $("none").classList.toggle("hidden", !!what);
+  $("sharebox").classList.toggle("hidden", !what);
+  if (what === shownWhat) return;                  // the camera calls this every frame: rebuild only on change
+  shownWhat = what;
+  if (what) $("capPrev").textContent = await buildCaption();
+  $("copyMsg").textContent = "";
+}
+
 function finish(dets, ms) {
   lastDets = dets; $("save").disabled = false; $("report").disabled = false;
+  updateShareCard(dets);
   $("empty").classList.add("hidden");
   const label = source === "sample" ? `Sample ${sampleIdx + 1} of ${N_SAMPLES}` : source === "camera" ? "Live camera" : source;
   $("timing").innerHTML = `<b>${label}</b> · ${dets.length} found · model ${Math.round(ms)} ms`;
@@ -688,7 +718,10 @@ const EXIFR = "https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.esm.mjs";
 let AUTH = null;
 const authorities = async () => (AUTH ??= await (await fetch("authorities.json")).json());
 
-function resetMeta() { meta = { lat: null, lon: null, when: null, how: null, place: "", city: "" }; }
+function resetMeta() {
+  meta = { lat: null, lon: null, when: null, how: null, place: "", city: "" };
+  $("loc").value = ""; $("tags").value = ""; capEdited = false; shownWhat = undefined;   // a new photo starts a new report
+}
 
 // GPS and capture time from the photo's EXIF data (phones and most dashcams write it; screenshots do not)
 async function readPhotoMeta(file) {
@@ -783,6 +816,8 @@ async function openReport() {
   $("locSrc").textContent = meta.how || (meta.lat ? "" : "No GPS in this photo: type the place or use your location");
   $("rpImg").src = composite(locLine()).toDataURL("image/jpeg", 0.9);
   $("dlg").showModal();
+  // edits made in the report panel show up in the sidebar caption too
+  $("dlg").addEventListener("close", async () => { if (describe(lastDets || [])) $("capPrev").textContent = capEdited ? $("cap").value : await buildCaption(); }, { once: true });
   if (meta.lat && !meta.place) await fillLocation(meta.lat, meta.lon, meta.how);
   else await refreshTags();
   $("rpImg").src = composite(locLine()).toDataURL("image/jpeg", 0.9);
@@ -823,6 +858,17 @@ $("copyCap").onclick = async () => {
   try { await navigator.clipboard.writeText($("cap").value); $("shareMsg").textContent = "Caption copied."; }
   catch { $("cap").select(); $("shareMsg").textContent = "Press Ctrl+C to copy the selected caption."; }
 };
+$("copyCap2").onclick = async () => {
+  const text = capEdited ? $("cap").value : await buildCaption();
+  $("capPrev").textContent = text;
+  try { await navigator.clipboard.writeText(text); $("copyMsg").textContent = "Caption copied. Paste it with your photo."; }
+  catch {
+    const r = document.createRange(); r.selectNodeContents($("capPrev"));
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    $("copyMsg").textContent = "Press Ctrl+C to copy the selected caption.";
+  }
+};
+$("openRep").onclick = openReport;
 // phones: the share sheet sends photo + caption straight to X, Instagram or WhatsApp
 $("share").onclick = async () => {
   const file = new File([await reportBlob()], fileName(), { type: "image/png" });

@@ -17,8 +17,9 @@ civic body and traffic police on X (from `web/authorities.json`, editable,
 marked "check before posting"), and writes a ready-to-post caption with the
 location, date, counts and hashtags, counted against X's 280 limit. On phones,
 **Share** sends the photo and caption straight to X, Instagram or WhatsApp;
-on desktop, **Post on X** opens a pre-filled post. Nothing is posted
-automatically: a person always reviews the tags and the photo first.
+on desktop, **Post on X** opens a pre-filled post. As soon as something is
+found, the caption also appears in the sidebar with **Copy caption**. Nothing
+is posted automatically: a person always reviews the tags and the photo first.
 
 Fixing one training mistake (early stopping on a noisy validation set) raised
 mAP@0.5 from 0.267 to 0.386, a 44% gain, with no model change. A 3.6x bigger
@@ -89,6 +90,11 @@ Design decisions and trade-offs: [docs/INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.
   from a motorcycle is lower and shakier.
 - Speed breakers and debris are not in RDD.
 - Transverse cracks have only 57 training boxes; that class is unreliable.
+- Rough village roads are missed. On a windshield photo of a broken rural
+  road the best score was 0.04 at every input size (640/960/1280): the
+  training photos are mostly paved roads, so this is a data gap, not a bug.
+  The app says so when it finds nothing. Fix: train with more RDD2022
+  countries (China motorbike, Czech, US, Japan).
 
 ## Data
 
