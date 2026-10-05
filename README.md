@@ -1,5 +1,7 @@
 # Road Hazard Detection
 
+[![tests](https://github.com/VivekVagale/road-hazard/actions/workflows/tests.yml/badge.svg)](https://github.com/VivekVagale/road-hazard/actions/workflows/tests.yml)
+
 Finds **potholes and road cracks** in road images and dashcam / helmet-cam
 video, using a YOLO11 detector fine-tuned on **7,706 real Indian road images**
 (RDD2022, India subset).

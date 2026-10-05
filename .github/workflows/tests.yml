@@ -1,0 +1,19 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The tests cover the dataset conversion (VOC to YOLO, block split),
+      # which is plain Python; torch and ultralytics are only needed for training.
+      - run: pip install "pytest>=8.0"
+      - run: python -m pytest -q
